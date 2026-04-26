@@ -1,0 +1,443 @@
+{% extends "base.html" %}
+{% block title %}Settings – ParkSense AI{% endblock %}
+{% block page_title %}System Settings{% endblock %}
+
+{% block content %}
+<div style="max-width:780px">
+
+<div style="margin-bottom:24px">
+  <h2 style="font-family:var(--font-mono);font-size:16px;color:var(--text-primary)">Configuration</h2>
+  <p style="font-size:13px;color:var(--text-muted);margin-top:2px">System-wide settings and hardware configuration</p>
+</div>
+
+<form method="POST" id="settingsForm">
+
+  <!-- ── Simulation ── -->
+  <div class="card mb-6">
+    <div class="card-header">
+      <span class="card-title"><i class="fa-solid fa-flask-vial" style="margin-right:6px;color:var(--accent4)"></i>Simulation Mode</span>
+      <span class="badge {% if settings.get('simulation_mode') == 'true' %}badge-warning{% else %}badge-muted{% endif %}" id="simStatusBadge">
+        {% if settings.get('simulation_mode') == 'true' %}ACTIVE{% else %}DISABLED{% endif %}
+      </span>
+    </div>
+    <div class="card-body">
+      <div style="display:flex;flex-direction:column;gap:20px">
+
+        <div style="display:flex;justify-content:space-between;align-items:flex-start">
+          <div>
+            <div style="font-weight:500;margin-bottom:4px">Enable Simulation Mode</div>
+            <div style="font-size:12px;color:var(--text-muted);max-width:400px">
+              Uses virtual sensors and simulated AI detections. No physical hardware required.
+            </div>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" name="simulation_mode" id="simToggle"
+                   {% if settings.get('simulation_mode') == 'true' %}checked{% endif %}
+                   onchange="updateSimBadge(this.checked)"/>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
+        <div>
+          <label>Auto-fire Interval (seconds)</label>
+          <input type="number" name="sim_interval" min="5" max="300"
+                 value="{{ settings.get('sim_interval', '15') }}" style="max-width:180px"/>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:4px">
+            Simulation loop fires a detection every N seconds. Min: 5s
+          </div>
+        </div>
+
+        <div style="background:rgba(240,160,48,.06);border:1px solid rgba(240,160,48,.2);border-radius:8px;padding:14px">
+          <div style="font-size:12px;color:var(--accent4);font-family:var(--font-mono);margin-bottom:8px">⚡ SIMULATION LOOP</div>
+          <div style="font-size:13px;color:var(--text-secondary)">
+            Loop is currently:
+            <strong style="color:{% if sim_running %}var(--accent4){% else %}var(--text-muted){% endif %}">
+              {% if sim_running %}RUNNING{% else %}STOPPED{% endif %}
+            </strong>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Camera & AI ── -->
+  <div class="card mb-6">
+    <div class="card-header">
+      <span class="card-title"><i class="fa-solid fa-camera" style="margin-right:6px"></i>Camera &amp; AI</span>
+    </div>
+    <div class="card-body">
+      <div style="display:flex;flex-direction:column;gap:20px">
+
+        <div>
+          <label>Camera Source</label>
+          <select name="camera_mode" style="max-width:280px">
+            <option value="pc"  {% if settings.get('camera_mode','pc') == 'pc'  %}selected{% endif %}>PC Camera (process on PC)</option>
+            <option value="rpi" {% if settings.get('camera_mode','pc') == 'rpi' %}selected{% endif %}>RPi Camera (send to PC for AI)</option>
+          </select>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:4px">
+            "PC Camera" captures locally on PC. "RPi Camera" captures on Pi and sends to PC AI server.
+          </div>
+        </div>
+
+        <div>
+          <label>YOLO Detection Confidence (%)</label>
+          <div style="display:flex;align-items:center;gap:12px">
+            <input type="range" name="yolo_conf" id="yoloSlider" min="30" max="95"
+                   value="{{ (settings.get('yolo_conf', '0.50')|float * 100)|int }}"
+                   oninput="document.getElementById('yoloVal').textContent = this.value + '%'"
+                   style="width:200px;accent-color:var(--accent)"/>
+            <span id="yoloVal" style="font-family:var(--font-mono);color:var(--accent);font-weight:700;min-width:40px">
+              {{ (settings.get('yolo_conf', '0.50')|float * 100)|int }}%
+            </span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Hardware ── -->
+  <div class="card mb-6">
+    <div class="card-header">
+      <span class="card-title"><i class="fa-solid fa-microchip" style="margin-right:6px"></i>Hardware Thresholds</span>
+    </div>
+    <div class="card-body">
+      <div>
+        <label>Vehicle Detection Distance (metres)</label>
+        <input type="number" name="distance_threshold" step="0.1" min="0.3" max="10"
+               value="{{ settings.get('distance_threshold', '2.0') }}" style="max-width:180px"/>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:4px">
+          HC-SR04 triggers detection when object is within this distance.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Maintenance ── -->
+  <div class="card mb-6">
+    <div class="card-header">
+      <span class="card-title"><i class="fa-solid fa-wrench" style="margin-right:6px"></i>Maintenance</span>
+    </div>
+    <div class="card-body">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div>
+          <div style="font-weight:500;margin-bottom:4px">Maintenance Mode</div>
+          <div style="font-size:12px;color:var(--text-muted);max-width:400px">
+            Disables gate opening and shows maintenance message. AI detection still runs.
+          </div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" name="maintenance_mode"
+                 {% if settings.get('maintenance_mode') == 'true' %}checked{% endif %}/>
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:flex;gap:12px;margin-bottom:32px">
+    <button type="submit" class="btn btn-primary btn-lg">
+      <i class="fa-solid fa-floppy-disk"></i> Save Settings
+    </button>
+    <a href="{{ url_for('admin_dashboard') }}" class="btn btn-secondary btn-lg">Cancel</a>
+  </div>
+
+</form>
+
+<!-- ── Connection Diagnostics ── -->
+<div class="card" id="diagCard">
+  <div class="card-header">
+    <span class="card-title"><i class="fa-solid fa-plug" style="margin-right:6px"></i>Connection Diagnostics</span>
+    <span id="overallStatus" class="badge badge-muted">NOT TESTED</span>
+  </div>
+  <div class="card-body">
+
+    <!-- Quick test buttons -->
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px">
+      <button class="btn btn-primary" onclick="runFullDiag()" id="fullDiagBtn">
+        <i class="fa-solid fa-stethoscope"></i> Full Diagnostic
+      </button>
+      <button class="btn btn-secondary" onclick="testPCConnection()" id="pcTestBtn">
+        <i class="fa-solid fa-server"></i> Ping PC Server
+      </button>
+      <button class="btn btn-secondary" onclick="testSensor()">
+        <i class="fa-solid fa-wave-square"></i> Test Sensor
+      </button>
+      <button class="btn btn-secondary" onclick="testGate()">
+        <i class="fa-solid fa-door-open"></i> Test Gate (2s)
+      </button>
+      <button class="btn btn-secondary" onclick="clearDiag()" style="margin-left:auto">
+        <i class="fa-solid fa-trash-can"></i> Clear
+      </button>
+    </div>
+
+    <!-- Status grid -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:20px" id="statusGrid">
+
+      <div class="diag-card" id="dc-pc">
+        <div class="diag-icon"><i class="fa-solid fa-server"></i></div>
+        <div class="diag-info">
+          <div class="diag-title">PC AI Server</div>
+          <div class="diag-val" id="dc-pc-val">—</div>
+        </div>
+        <span class="badge badge-muted diag-badge" id="dc-pc-badge">?</span>
+      </div>
+
+      <div class="diag-card" id="dc-zmq">
+        <div class="diag-icon"><i class="fa-solid fa-network-wired"></i></div>
+        <div class="diag-info">
+          <div class="diag-title">ZeroMQ Link</div>
+          <div class="diag-val" id="dc-zmq-val">—</div>
+        </div>
+        <span class="badge badge-muted diag-badge" id="dc-zmq-badge">?</span>
+      </div>
+
+      <div class="diag-card" id="dc-sensor">
+        <div class="diag-icon"><i class="fa-solid fa-wave-square"></i></div>
+        <div class="diag-info">
+          <div class="diag-title">Ultrasonic Sensor</div>
+          <div class="diag-val" id="dc-sensor-val">—</div>
+        </div>
+        <span class="badge badge-muted diag-badge" id="dc-sensor-badge">?</span>
+      </div>
+
+      <div class="diag-card" id="dc-gate">
+        <div class="diag-icon"><i class="fa-solid fa-door-open"></i></div>
+        <div class="diag-info">
+          <div class="diag-title">Gate / Servo</div>
+          <div class="diag-val" id="dc-gate-val">—</div>
+        </div>
+        <span class="badge badge-muted diag-badge" id="dc-gate-badge">?</span>
+      </div>
+
+    </div>
+
+    <!-- Error explainer (shown on failure) -->
+    <div id="diagErrorBox" style="display:none;background:rgba(240,80,80,.08);border:1px solid rgba(240,80,80,.25);border-radius:8px;padding:14px;margin-bottom:16px">
+      <div style="font-family:var(--font-mono);font-size:11px;color:var(--accent3);margin-bottom:8px">⚠ ISSUE DETECTED</div>
+      <div id="diagErrorMsg" style="font-size:13px;color:#f8a8a8;line-height:1.6"></div>
+      <div id="diagFixSuggestion" style="margin-top:10px;font-size:12px;color:var(--text-muted);line-height:1.7"></div>
+    </div>
+
+    <!-- Log output -->
+    <div class="log-feed" id="diagOutput" style="max-height:200px">
+      <div class="log-entry" style="color:var(--text-muted)">— Click "Full Diagnostic" to test all connections —</div>
+    </div>
+
+  </div>
+</div>
+
+</div>
+
+<style>
+.diag-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  transition: border-color var(--transition);
+}
+.diag-card.ok     { border-color: rgba(34,197,94,.3);  }
+.diag-card.fail   { border-color: rgba(240,80,80,.3);   }
+.diag-card.warn   { border-color: rgba(240,160,48,.3);  }
+
+.diag-icon  { font-size: 20px; opacity: .5; flex-shrink: 0; min-width: 24px; text-align:center; }
+.diag-info  { flex: 1; min-width: 0; }
+.diag-title { font-family: var(--font-mono); font-size: 10px; color: var(--text-muted); letter-spacing:.06em; text-transform: uppercase; }
+.diag-val   { font-size: 12px; color: var(--text-secondary); margin-top: 2px; word-break: break-all; }
+.diag-badge { flex-shrink: 0; }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// ── Badge toggle ──────────────────────────────────────────────────────────────
+function updateSimBadge(checked) {
+  const badge = document.getElementById('simStatusBadge');
+  badge.textContent = checked ? 'ACTIVE' : 'DISABLED';
+  badge.className   = checked ? 'badge badge-warning' : 'badge badge-muted';
+}
+
+// ── Diag helpers ──────────────────────────────────────────────────────────────
+function diagLog(msg, level = 'INFO') {
+  const el    = document.getElementById('diagOutput');
+  const entry = document.createElement('div');
+  entry.className = 'log-entry fade-in';
+  entry.innerHTML = `<span class="log-ts">${new Date().toLocaleTimeString()}</span>`
+                  + `<span class="log-lvl-${level}">${level}</span>`
+                  + `<span class="log-msg">${msg}</span>`;
+  el.insertBefore(entry, el.firstChild);
+  while (el.children.length > 100) el.lastChild.remove();
+}
+
+function setDiagCard(id, status, valText, badgeText) {
+  // status: 'ok' | 'fail' | 'warn' | 'checking'
+  const card  = document.getElementById(`dc-${id}`);
+  const val   = document.getElementById(`dc-${id}-val`);
+  const badge = document.getElementById(`dc-${id}-badge`);
+  if (!card) return;
+
+  card.className = `diag-card ${status === 'checking' ? '' : status}`;
+  if (val)   val.textContent   = valText;
+  if (badge) {
+    badge.textContent = badgeText;
+    badge.className   = `badge diag-badge badge-${
+      status === 'ok'       ? 'success' :
+      status === 'fail'     ? 'danger'  :
+      status === 'warn'     ? 'warning' : 'muted'}`;
+  }
+}
+
+function showError(msg, suggestion) {
+  const box  = document.getElementById('diagErrorBox');
+  const msgEl = document.getElementById('diagErrorMsg');
+  const sugEl = document.getElementById('diagFixSuggestion');
+  box.style.display  = 'block';
+  msgEl.textContent  = msg;
+  sugEl.innerHTML    = suggestion;
+}
+
+function clearDiag() {
+  document.getElementById('diagOutput').innerHTML =
+    '<div class="log-entry" style="color:var(--text-muted)">— Cleared —</div>';
+  document.getElementById('diagErrorBox').style.display = 'none';
+  document.getElementById('overallStatus').textContent  = 'NOT TESTED';
+  document.getElementById('overallStatus').className    = 'badge badge-muted';
+  ['pc','zmq','sensor','gate'].forEach(id => setDiagCard(id, '', '—', '?'));
+}
+
+// ── Individual tests ──────────────────────────────────────────────────────────
+async function testPCConnection() {
+  diagLog('Pinging PC AI server via /api/status…');
+  setDiagCard('pc', 'checking', 'Testing…', '…');
+  setDiagCard('zmq', 'checking', 'Testing…', '…');
+  try {
+    const t0  = performance.now();
+    const res  = await fetch('/api/status');
+    const data = await res.json();
+    const ms   = Math.round(performance.now() - t0);
+
+    if (data.pc_online) {
+      setDiagCard('pc',  'ok',   `Online  (${ms}ms)`,           'ONLINE');
+      setDiagCard('zmq', 'ok',   `ZeroMQ link healthy`,         'OK');
+      diagLog(`PC server online ✓  round-trip: ${ms}ms`, 'INFO');
+    } else if (data.simulation_mode) {
+      setDiagCard('pc',  'warn', 'Simulation mode — no PC needed', 'SIM');
+      setDiagCard('zmq', 'warn', 'Not used in sim mode',           'SIM');
+      diagLog('System is in simulation mode — PC server not required', 'WARNING');
+    } else {
+      setDiagCard('pc',  'fail', 'Unreachable',           'OFFLINE');
+      setDiagCard('zmq', 'fail', data.pc_error || 'Timeout / refused', 'FAIL');
+      diagLog('PC server OFFLINE', 'ERROR');
+      showError(
+        `Cannot reach the PC AI server at ${data.pc_endpoint || 'tcp://…:5555'}.`,
+        `<b>Checklist:</b><br>
+        1. Make sure <code>python run_pc.py</code> is running on the PC.<br>
+        2. Verify <code>PC_IP</code> in your <code>.env</code> file matches the PC's LAN IP.<br>
+        3. Confirm port <code>5555</code> is not blocked by a firewall.<br>
+        4. If PC is on Windows, allow Python through Windows Firewall.<br>
+        5. Both devices must be on the same network.`
+      );
+    }
+    return data.pc_online;
+  } catch (e) {
+    setDiagCard('pc',  'fail', 'Request error', 'ERR');
+    setDiagCard('zmq', 'fail', e.message,       'ERR');
+    diagLog('Status request failed: ' + e.message, 'ERROR');
+    showError('Could not reach the Flask API.', 'Check the Flask server is running.');
+    return false;
+  }
+}
+
+async function testSensor() {
+  diagLog('Reading ultrasonic sensor…');
+  setDiagCard('sensor', 'checking', 'Reading…', '…');
+  try {
+    const res  = await fetch('/api/sensor/status');
+    const data = await res.json();
+    const mode = data.simulated ? '(simulated)' : '(hardware)';
+    const dist = data.distance_m > 0 ? `${data.distance_m.toFixed(2)}m` : 'Error';
+    setDiagCard('sensor', data.distance_m > 0 ? 'ok' : 'warn',
+                `${dist} ${mode}`,
+                data.distance_m > 0 ? 'OK' : 'WARN');
+    diagLog(`Sensor: ${dist}  vehicle=${data.vehicle_detected}  simulated=${data.simulated}`,
+            data.distance_m > 0 ? 'INFO' : 'WARNING');
+    return data.distance_m > 0;
+  } catch (e) {
+    setDiagCard('sensor', 'fail', e.message, 'ERR');
+    diagLog('Sensor read failed: ' + e.message, 'ERROR');
+    return false;
+  }
+}
+
+async function testGate() {
+  diagLog('Opening gate for 2-second test…');
+  setDiagCard('gate', 'checking', 'Testing…', '…');
+  try {
+    await fetch('/api/gate/open', { method: 'POST' });
+    setDiagCard('gate', 'ok', 'Opened ✓ (auto-closing in 2s)', 'OPEN');
+    diagLog('Gate opened ✓', 'INFO');
+    setTimeout(async () => {
+      await fetch('/api/gate/close', { method: 'POST' });
+      setDiagCard('gate', 'ok', 'Closed ✓', 'CLOSED');
+      diagLog('Gate auto-closed ✓', 'INFO');
+    }, 2000);
+    return true;
+  } catch (e) {
+    setDiagCard('gate', 'fail', e.message, 'ERR');
+    diagLog('Gate test failed: ' + e.message, 'ERROR');
+    return false;
+  }
+}
+
+// ── Full diagnostic ───────────────────────────────────────────────────────────
+async function runFullDiag() {
+  const btn = document.getElementById('fullDiagBtn');
+  btn.disabled  = true;
+  btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Running…';
+  document.getElementById('diagErrorBox').style.display = 'none';
+
+  const overall = document.getElementById('overallStatus');
+  overall.textContent = 'TESTING…';
+  overall.className   = 'badge badge-warning';
+
+  diagLog('═══ Full diagnostic started ═══', 'INFO');
+
+  const pcOk     = await testPCConnection();
+  const sensorOk = await testSensor();
+  const gateOk   = await testGate();
+
+  diagLog('═══ Diagnostic complete ═══', 'INFO');
+
+  const allOk = pcOk && sensorOk && gateOk;
+  const anyFail = !pcOk || !sensorOk || !gateOk;
+
+  overall.textContent = allOk ? 'ALL OK' : anyFail ? 'ISSUES FOUND' : 'PARTIAL';
+  overall.className   = `badge badge-${allOk ? 'success' : 'danger'}`;
+
+  btn.disabled  = false;
+  btn.innerHTML = '<i class="fa-solid fa-stethoscope"></i> Full Diagnostic';
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+document.getElementById('yoloSlider').dispatchEvent(new Event('input'));
+
+// Auto-run a light status check on page load
+window.addEventListener('DOMContentLoaded', async () => {
+  try {
+    const res  = await fetch('/api/status');
+    const data = await res.json();
+    if (data.pc_online) {
+      setDiagCard('pc', 'ok', 'Online', 'ONLINE');
+    } else if (data.simulation_mode) {
+      setDiagCard('pc', 'warn', 'Simulation mode', 'SIM');
+    } else {
+      setDiagCard('pc', 'fail', 'Offline', 'OFFLINE');
+    }
+  } catch(e) {}
+});
+</script>
+{% endblock %}

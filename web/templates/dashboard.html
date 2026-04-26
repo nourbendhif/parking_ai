@@ -1,0 +1,387 @@
+{% extends "base.html" %}
+{% block title %}Dashboard – ParkSense AI{% endblock %}
+{% block page_title %}Live Dashboard{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<!-- ── Stat cards ──────────────────────────────────────────────────────────── -->
+<div class="stats-grid mb-6">
+  <div class="stat-card accent-teal">
+    <div class="stat-label">Events Today</div>
+    <div class="stat-value" id="statEventsToday">{{ stats.events_today }}</div>
+    <div class="stat-delta">Total detections</div>
+    <i class="fa-solid fa-bolt stat-icon"></i>
+  </div>
+  <div class="stat-card accent-green">
+    <div class="stat-label">Authorized Today</div>
+    <div class="stat-value" id="statAuthToday">{{ stats.auth_today }}</div>
+    <div class="stat-delta">Gates opened</div>
+    <i class="fa-solid fa-check stat-icon"></i>
+  </div>
+  <div class="stat-card accent-purple">
+    <div class="stat-label">Registered Vehicles</div>
+    <div class="stat-value">{{ stats.total_vehicles }}</div>
+    <div class="stat-delta">In database</div>
+    <i class="fa-solid fa-car stat-icon"></i>
+  </div>
+  <div class="stat-card accent-orange">
+    <div class="stat-label">Total Users</div>
+    <div class="stat-value">{{ stats.total_users }}</div>
+    <div class="stat-delta">Accounts</div>
+    <i class="fa-solid fa-users stat-icon"></i>
+  </div>
+</div>
+
+<!-- ── Main grid ───────────────────────────────────────────────────────────── -->
+<div class="grid-2 mb-6" style="grid-template-columns: 1fr 1fr">
+
+  <!-- Sensor + Gate -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title"><i class="fa-solid fa-radar" style="margin-right:6px"></i>Live Hardware</span>
+      <span class="badge badge-muted" id="hwSimBadge">{% if sim_mode %}SIMULATION{% else %}HARDWARE{% endif %}</span>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:0;border-bottom:1px solid var(--border)">
+
+      <!-- Sensor -->
+      <div class="sensor-widget" style="border-right:1px solid var(--border)">
+        <svg class="radar-svg" viewBox="0 0 120 120" style="width:100px;height:100px">
+          <circle id="radarRing1" cx="60" cy="60" r="40" fill="none" stroke="var(--accent)" stroke-width="1" opacity="0.15"/>
+          <circle id="radarRing2" cx="60" cy="60" r="28" fill="none" stroke="var(--accent)" stroke-width="1" opacity="0.15"/>
+          <circle id="radarRing3" cx="60" cy="60" r="16" fill="none" stroke="var(--accent)" stroke-width="1" opacity="0.15"/>
+          <circle id="radarDot"   cx="60" cy="60" r="6"  fill="var(--accent)" opacity="0.9"/>
+          <circle id="radarPulse" cx="60" cy="60" r="12" fill="none" stroke="var(--accent)" stroke-width="1.5" opacity="0"/>
+        </svg>
+        <div class="distance-display" id="distanceDisplay">--</div>
+        <div class="distance-unit">metres</div>
+        <div style="margin-top:4px">
+          <span class="badge" id="vehicleBadge" style="font-size:11px">NO VEHICLE</span>
+        </div>
+      </div>
+
+      <!-- Gate -->
+      <div class="gate-widget">
+        <div style="font-family:var(--font-mono);font-size:10px;color:var(--text-muted);letter-spacing:.1em;text-transform:uppercase">Gate Status</div>
+        <div class="gate-visual">
+          <!-- Gate arm SVG -->
+          <svg viewBox="0 0 100 80" style="width:100%;height:100%">
+            <rect x="45" y="60" width="10" height="20" fill="var(--accent)" rx="2"/>
+            <rect id="gateArm" x="47" y="4" width="6" height="56" fill="var(--accent)" rx="3"
+                  style="transform-origin:50px 60px;transition:transform .6s cubic-bezier(.23,1,.32,1)"/>
+            <rect x="10" y="72" width="80" height="6" fill="var(--text-muted)" rx="3" opacity=".4"/>
+          </svg>
+        </div>
+        <div class="badge" id="gateBadge">CLOSED</div>
+        {% if current_user.is_admin %}
+        <div style="display:flex;gap:8px;margin-top:4px">
+          <button class="btn btn-sm btn-primary" onclick="manualGate('open')">
+            <i class="fa-solid fa-lock-open"></i> Open
+          </button>
+          <button class="btn btn-sm btn-secondary" onclick="manualGate('close')">
+            <i class="fa-solid fa-lock"></i> Close
+          </button>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Trigger detection -->
+    <div style="padding:16px;display:flex;gap:10px;align-items:center">
+      <button class="btn btn-primary" id="detectBtn" onclick="triggerDetection()">
+        <i class="fa-solid fa-camera"></i> Capture & Detect
+      </button>
+      <input type="file" id="imageUpload" accept="image/*" style="display:none" onchange="detectFromFile(this)"/>
+      <button class="btn btn-secondary" onclick="document.getElementById('imageUpload').click()">
+        <i class="fa-solid fa-upload"></i> Upload Image
+      </button>
+    </div>
+  </div>
+
+  <!-- Detection result -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title"><i class="fa-solid fa-eye" style="margin-right:6px"></i>Detection Result</span>
+      <span id="detectionBadge" class="badge badge-muted">IDLE</span>
+    </div>
+    <div class="card-body" style="padding:0">
+      <div class="detection-panel" id="detectionPanel">
+        <div class="detection-placeholder" id="detectionPlaceholder">
+          <i class="fa-solid fa-camera-slash"></i>
+          <p>No detection yet</p>
+          <p style="font-size:11px;color:var(--text-muted)">Press "Capture & Detect" or upload an image</p>
+        </div>
+        <img id="detectionImg" src="" alt="Detection" style="display:none"/>
+        <div class="detection-overlay" id="detectionOverlay" style="display:none">
+          <div>
+            <div style="font-family:var(--font-mono);font-size:18px;font-weight:700;color:#fff" id="detectedPlate">---</div>
+            <div style="font-size:11px;color:rgba(255,255,255,.6)" id="detectedConf"></div>
+          </div>
+          <div id="detectedAuth" class="badge">---</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Bottom grid ─────────────────────────────────────────────────────────── -->
+<div class="grid-2">
+
+  <!-- Recent events -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title"><i class="fa-solid fa-clock-rotate-left" style="margin-right:6px"></i>Recent Events</span>
+      <a href="{{ url_for('admin_events') }}" class="btn btn-sm btn-secondary">View All</a>
+    </div>
+    <div class="card-body" style="padding:0 20px" id="recentEventsList">
+      {% for e in recent_events %}
+      <div class="event-row">
+        <div class="event-icon {% if e.gate_opened %}authorized{% elif e.simulated %}simulated{% else %}denied{% endif %}">
+          <i class="fa-solid fa-{% if e.gate_opened %}check{% elif e.simulated %}flask-vial{% else %}xmark{% endif %}"></i>
+        </div>
+        <div class="event-info">
+          <div class="event-plate">{{ e.license_plate or 'NO PLATE' }}</div>
+          <div class="event-meta">{{ e.notes or e.event_type }}</div>
+        </div>
+        <div class="event-time">{{ e.timestamp.strftime('%H:%M:%S') }}</div>
+      </div>
+      {% else %}
+      <p style="color:var(--text-muted);padding:20px 0;text-align:center;font-size:13px">No events yet</p>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- Live log -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title"><i class="fa-solid fa-terminal" style="margin-right:6px"></i>Live Log</span>
+      <button class="btn btn-sm btn-secondary" onclick="clearLog()">Clear</button>
+    </div>
+    <div class="card-body" style="padding:12px">
+      <div class="log-feed" id="logFeed">
+        <div class="log-entry">
+          <span class="log-ts">{{ now().strftime('%H:%M:%S') if now else '--:--:--' }}</span>
+          <span class="log-lvl-INFO">INFO</span>
+          <span class="log-msg">Dashboard loaded. Monitoring active.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Detection loading overlay ───────────────────────────────────────────── -->
+<div id="loadingOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:300;display:none;place-items:center">
+  <div style="text-align:center">
+    <i class="fa-solid fa-circle-notch spin" style="font-size:40px;color:var(--accent)"></i>
+    <div style="font-family:var(--font-mono);color:var(--accent);margin-top:12px">PROCESSING…</div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const SIM_MODE = {{ 'true' if sim_mode else 'false' }};
+
+// ── SSE real-time stream ─────────────────────────────────────────────────────
+const evtSource = new EventSource('/api/stream');
+evtSource.onmessage = (e) => {
+  const data = JSON.parse(e.data);
+  updateSensorUI(data.distance_m, data.vehicle_detected);
+  updateGateUI(data.gate_open);
+};
+
+function updateSensorUI(dist, detected) {
+  const el = document.getElementById('distanceDisplay');
+  el.textContent = dist > 0 ? dist.toFixed(2) : '--';
+
+  const badge = document.getElementById('vehicleBadge');
+  const dot   = document.getElementById('radarDot');
+  const pulse = document.getElementById('radarPulse');
+
+  if (detected) {
+    badge.textContent = 'VEHICLE DETECTED';
+    badge.className   = 'badge badge-danger';
+    dot.setAttribute('fill', 'var(--accent3)');
+    animatePulse(pulse, 'var(--accent3)');
+  } else {
+    badge.textContent = 'NO VEHICLE';
+    badge.className   = 'badge badge-muted';
+    dot.setAttribute('fill', 'var(--accent)');
+  }
+}
+
+function animatePulse(el, color) {
+  el.setAttribute('stroke', color);
+  el.setAttribute('opacity', '0.8');
+  el.animate([
+    { r: '12', opacity: 0.8 },
+    { r: '50', opacity: 0 }
+  ], { duration: 1200, easing: 'ease-out' });
+}
+
+function updateGateUI(isOpen) {
+  const arm   = document.getElementById('gateArm');
+  const badge = document.getElementById('gateBadge');
+  if (isOpen) {
+    arm.style.transform   = 'rotate(-90deg)';
+    badge.textContent     = 'OPEN';
+    badge.className       = 'badge badge-success';
+  } else {
+    arm.style.transform   = '';
+    badge.textContent     = 'CLOSED';
+    badge.className       = 'badge badge-muted';
+  }
+}
+
+// ── Detection ─────────────────────────────────────────────────────────────────
+async function triggerDetection() {
+  showLoading(true);
+  try {
+    const res  = await fetch('/api/detect', { method: 'POST',
+      headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    const data = await res.json();
+    showDetection(data);
+    addLog('INFO', `Detection: ${data.plate || 'NO PLATE'} | ${data.authorized ? 'AUTHORIZED' : 'DENIED'}`);
+    refreshEvents();
+  } catch(e) {
+    addLog('ERROR', 'Detection request failed: ' + e.message);
+  }
+  showLoading(false);
+}
+
+async function detectFromFile(input) {
+  const file = input.files[0];
+  if (!file) return;
+  showLoading(true);
+  const b64 = await toBase64(file);
+  try {
+    const res  = await fetch('/api/detect', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image_b64: b64.split(',')[1] })
+    });
+    const data = await res.json();
+    showDetection(data);
+    addLog('INFO', `Upload detect: ${data.plate || 'NO PLATE'}`);
+    refreshEvents();
+  } catch(e) {
+    addLog('ERROR', 'Upload failed: ' + e.message);
+  }
+  showLoading(false);
+  input.value = '';
+}
+
+function showDetection(data) {
+  const placeholder = document.getElementById('detectionPlaceholder');
+  const img         = document.getElementById('detectionImg');
+  const overlay     = document.getElementById('detectionOverlay');
+  const badge       = document.getElementById('detectionBadge');
+  const plate       = document.getElementById('detectedPlate');
+  const conf        = document.getElementById('detectedConf');
+  const auth        = document.getElementById('detectedAuth');
+
+  if (data.annotated_b64) {
+    img.src           = 'data:image/jpeg;base64,' + data.annotated_b64;
+    img.style.display = 'block';
+    placeholder.style.display = 'none';
+    overlay.style.display     = 'flex';
+  }
+
+  plate.textContent = data.plate || 'NO PLATE FOUND';
+  conf.textContent  = data.confidence ? `Confidence: ${(data.confidence*100).toFixed(1)}%` : '';
+
+  if (data.authorized) {
+    auth.textContent  = '✓ AUTHORIZED';
+    auth.className    = 'badge badge-success';
+    badge.textContent = 'AUTHORIZED';
+    badge.className   = 'badge badge-success';
+  } else if (data.plate) {
+    auth.textContent  = '✗ DENIED';
+    auth.className    = 'badge badge-danger';
+    badge.textContent = 'DENIED';
+    badge.className   = 'badge badge-danger';
+  } else {
+    auth.textContent  = '? UNKNOWN';
+    auth.className    = 'badge badge-muted';
+    badge.textContent = 'NO DETECTION';
+    badge.className   = 'badge badge-muted';
+  }
+
+  if (data.simulated) {
+    badge.textContent += ' (SIM)';
+  }
+}
+
+// ── Gate manual control ───────────────────────────────────────────────────────
+async function manualGate(action) {
+  await fetch(`/api/gate/${action}`, { method: 'POST' });
+  addLog('INFO', `Manual gate ${action.toUpperCase()} command sent`);
+}
+
+// ── Events refresh ────────────────────────────────────────────────────────────
+async function refreshEvents() {
+  const res  = await fetch('/api/events/recent?limit=6');
+  const data = await res.json();
+  const list = document.getElementById('recentEventsList');
+  list.innerHTML = data.map(e => `
+    <div class="event-row fade-in">
+      <div class="event-icon ${e.gate_opened ? 'authorized' : e.simulated ? 'simulated' : 'denied'}">
+        <i class="fa-solid fa-${e.gate_opened ? 'check' : e.simulated ? 'flask-vial' : 'xmark'}"></i>
+      </div>
+      <div class="event-info">
+        <div class="event-plate">${e.license_plate || 'NO PLATE'}</div>
+        <div class="event-meta">${e.notes || e.event_type}</div>
+      </div>
+      <div class="event-time">${new Date(e.timestamp).toLocaleTimeString()}</div>
+    </div>`).join('') || '<p style="color:var(--text-muted);padding:20px 0;text-align:center">No events</p>';
+}
+
+// ── Log feed ──────────────────────────────────────────────────────────────────
+function addLog(level, msg) {
+  const feed = document.getElementById('logFeed');
+  const ts   = new Date().toLocaleTimeString();
+  const el   = document.createElement('div');
+  el.className = 'log-entry fade-in';
+  el.innerHTML = `<span class="log-ts">${ts}</span><span class="log-lvl-${level}">${level}</span><span class="log-msg">${msg}</span>`;
+  feed.insertBefore(el, feed.firstChild);
+  if (feed.children.length > 60) feed.lastChild.remove();
+}
+
+function clearLog() {
+  document.getElementById('logFeed').innerHTML = '';
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function showLoading(show) {
+  const el = document.getElementById('loadingOverlay');
+  el.style.display = show ? 'grid' : 'none';
+}
+
+function toBase64(file) {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload  = () => res(r.result);
+    r.onerror = rej;
+    r.readAsDataURL(file);
+  });
+}
+
+// Poll logs every 8s
+setInterval(async () => {
+  try {
+    const res  = await fetch('/api/logs/recent?limit=5');
+    if (!res.ok) return;
+    const logs = await res.json();
+    logs.forEach(l => addLog(l.level, `[${l.component}] ${l.message}`));
+  } catch(e) {}
+}, 8000);
+
+// Sim badge
+if (SIM_MODE) {
+  const sb = document.getElementById('simBadge');
+  if (sb) { sb.style.display = 'flex'; sb.classList.add('sim-active'); }
+}
+</script>
+{% endblock %}

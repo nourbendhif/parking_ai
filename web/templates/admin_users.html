@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+{% block title %}Users – ParkSense AI{% endblock %}
+{% block page_title %}User Management{% endblock %}
+
+{% block content %}
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+  <div>
+    <h2 style="font-family:var(--font-mono);font-size:16px;color:var(--text-primary)">Registered Users</h2>
+    <p style="font-size:13px;color:var(--text-muted);margin-top:2px">Manage accounts and roles</p>
+  </div>
+  <button class="btn btn-primary" onclick="openModal('createUserModal')">
+    <i class="fa-solid fa-user-plus"></i> New User
+  </button>
+</div>
+
+<div class="card">
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Username</th>
+          <th>Email</th>
+          <th>Role</th>
+          <th>Status</th>
+          <th>Last Login</th>
+          <th>Created</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for user in users %}
+        <tr>
+          <td class="mono" style="color:var(--text-muted)">{{ user.id }}</td>
+          <td>
+            <div style="display:flex;align-items:center;gap:8px">
+              <div style="width:28px;height:28px;border-radius:50%;background:var(--accent2);display:grid;place-items:center;font-family:var(--font-mono);font-size:11px;font-weight:700;flex-shrink:0">
+                {{ user.username[0]|upper }}
+              </div>
+              <span style="font-weight:500">{{ user.username }}</span>
+              {% if user.id == current_user.id %}
+              <span class="badge badge-info" style="font-size:10px">YOU</span>
+              {% endif %}
+            </div>
+          </td>
+          <td style="color:var(--text-secondary)">{{ user.email }}</td>
+          <td>
+            <span class="badge {% if user.role == 'admin' %}badge-info{% else %}badge-muted{% endif %}">
+              <i class="fa-solid fa-{% if user.role == 'admin' %}shield-halved{% else %}user{% endif %}"></i>
+              {{ user.role }}
+            </span>
+          </td>
+          <td>
+            <span class="badge {% if user.is_active %}badge-success{% else %}badge-danger{% endif %}">
+              {{ 'ACTIVE' if user.is_active else 'INACTIVE' }}
+            </span>
+          </td>
+          <td style="color:var(--text-muted);font-size:12px">
+            {{ user.last_login.strftime('%Y-%m-%d %H:%M') if user.last_login else '—' }}
+          </td>
+          <td style="color:var(--text-muted);font-size:12px">
+            {{ user.created_at.strftime('%Y-%m-%d') }}
+          </td>
+          <td>
+            {% if user.id != current_user.id %}
+            <form method="POST" action="{{ url_for('admin_toggle_user', uid=user.id) }}" style="display:inline">
+              <button type="submit" class="btn btn-sm {% if user.is_active %}btn-danger{% else %}btn-secondary{% endif %}">
+                {{ 'Deactivate' if user.is_active else 'Activate' }}
+              </button>
+            </form>
+            {% else %}
+            <span style="color:var(--text-muted);font-size:12px">—</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:32px">No users found</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Create User Modal -->
+<div class="modal-backdrop" id="createUserModal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title"><i class="fa-solid fa-user-plus" style="margin-right:8px"></i>Create New User</span>
+      <button class="modal-close" onclick="closeModal('createUserModal')">&times;</button>
+    </div>
+    <form method="POST" action="{{ url_for('admin_create_user') }}">
+      <div class="modal-body">
+        <div class="form-group">
+          <label>Username</label>
+          <input type="text" name="username" required minlength="3" placeholder="e.g. john_doe"/>
+        </div>
+        <div class="form-group">
+          <label>Email</label>
+          <input type="email" name="email" required placeholder="user@example.com"/>
+        </div>
+        <div class="form-group">
+          <label>Password</label>
+          <input type="password" name="password" required minlength="6" placeholder="Min. 6 characters"/>
+        </div>
+        <div class="form-group">
+          <label>Role</label>
+          <select name="role">
+            <option value="user">User</option>
+            <option value="admin">Admin</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeModal('createUserModal')">Cancel</button>
+        <button type="submit" class="btn btn-primary"><i class="fa-solid fa-check"></i> Create</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

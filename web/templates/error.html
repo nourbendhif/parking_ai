@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}{{ code }} – ParkSense AI{% endblock %}
+{% block page_title %}Error{% endblock %}
+
+{% block content %}
+<div class="error-page">
+  <div class="error-code">{{ code }}</div>
+  <h2 style="font-family:var(--font-mono);font-size:18px;color:var(--text-secondary);margin-top:12px">{{ message }}</h2>
+  <p style="color:var(--text-muted);margin-top:8px;font-size:13px">
+    {% if code == 403 %}You don't have permission to access this resource.
+    {% elif code == 404 %}The page you're looking for doesn't exist.
+    {% else %}Something went wrong on our end. Please try again.{% endif %}
+  </p>
+  <div style="margin-top:28px;display:flex;gap:10px">
+    <a href="javascript:history.back()" class="btn btn-secondary">← Go Back</a>
+    <a href="{{ url_for('dashboard') }}" class="btn btn-primary">
+      <i class="fa-solid fa-gauge-high"></i> Dashboard
+    </a>
+  </div>
+</div>
+{% endblock %}

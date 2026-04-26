@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Register – ParkSense AI{% endblock %}
+
+{% block auth_content %}
+<div class="auth-page">
+  <div class="auth-card fade-in">
+    <div class="auth-logo">
+      <div class="brand-icon"><i class="fa-solid fa-square-parking"></i></div>
+      <div>
+        <div class="auth-title">Create Account</div>
+        <div class="auth-sub">ParkSense AI – New User Registration</div>
+      </div>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for cat, msg in messages %}
+      <div class="flash flash-{{ cat }}" style="margin-bottom:16px">
+        <i class="fa-solid fa-exclamation-circle"></i> {{ msg }}
+        <button onclick="this.parentElement.remove()">&times;</button>
+      </div>
+      {% endfor %}
+    {% endwith %}
+
+    <form method="POST">
+      <div class="form-group">
+        <label>Username</label>
+        <input type="text" name="username" placeholder="Choose a username" required autofocus minlength="3"/>
+      </div>
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" name="email" placeholder="your@email.com" required/>
+      </div>
+      <div class="form-group">
+        <label>Password</label>
+        <input type="password" name="password" placeholder="Min. 6 characters" required minlength="6"/>
+      </div>
+      <div class="form-group">
+        <label>Confirm Password</label>
+        <input type="password" name="confirm_password" placeholder="Repeat password" required/>
+      </div>
+      <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;margin-top:8px">
+        <i class="fa-solid fa-user-plus"></i> Create Account
+      </button>
+    </form>
+
+    <p style="text-align:center;margin-top:20px;font-size:13px;color:var(--text-muted)">
+      Already have an account? <a href="{{ url_for('login') }}">Sign in</a>
+    </p>
+  </div>
+</div>
+{% endblock %}

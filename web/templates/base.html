@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>{% block title %}ParkSense AI{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,700;1,400&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}"/>
+  {% block extra_head %}{% endblock %}
+</head>
+<body>
+
+{% if current_user.is_authenticated %}
+<!-- ── Sidebar ─────────────────────────────────────────────────────────────── -->
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-brand">
+    <div class="brand-icon"><i class="fa-solid fa-square-parking"></i></div>
+    <div class="brand-text">
+      <span class="brand-name">ParkSense</span>
+      <span class="brand-sub">AI System</span>
+    </div>
+  </div>
+
+  <nav class="sidebar-nav">
+    <div class="nav-section-label">MAIN</div>
+    <a href="{{ url_for('dashboard') }}" class="nav-item {% if request.endpoint == 'dashboard' %}active{% endif %}">
+      <i class="fa-solid fa-gauge-high"></i><span>Dashboard</span>
+    </a>
+    <a href="{{ url_for('reservations') }}" class="nav-item {% if request.endpoint == 'reservations' %}active{% endif %}">
+      <i class="fa-solid fa-calendar-check"></i><span>Reservations</span>
+    </a>
+
+    {% if current_user.is_admin %}
+    <div class="nav-section-label">ADMIN</div>
+    <a href="{{ url_for('admin_dashboard') }}" class="nav-item {% if request.endpoint == 'admin_dashboard' %}active{% endif %}">
+      <i class="fa-solid fa-chart-line"></i><span>Analytics</span>
+    </a>
+    <a href="{{ url_for('admin_users') }}" class="nav-item {% if request.endpoint == 'admin_users' %}active{% endif %}">
+      <i class="fa-solid fa-users"></i><span>Users</span>
+    </a>
+    <a href="{{ url_for('admin_vehicles') }}" class="nav-item {% if request.endpoint == 'admin_vehicles' %}active{% endif %}">
+      <i class="fa-solid fa-car"></i><span>Vehicles</span>
+    </a>
+    <a href="{{ url_for('admin_events') }}" class="nav-item {% if request.endpoint == 'admin_events' %}active{% endif %}">
+      <i class="fa-solid fa-list-check"></i><span>Events</span>
+    </a>
+    <a href="{{ url_for('admin_logs') }}" class="nav-item {% if request.endpoint == 'admin_logs' %}active{% endif %}">
+      <i class="fa-solid fa-terminal"></i><span>Logs</span>
+    </a>
+    <a href="{{ url_for('admin_settings') }}" class="nav-item {% if request.endpoint == 'admin_settings' %}active{% endif %}">
+      <i class="fa-solid fa-sliders"></i><span>Settings</span>
+    </a>
+    {% endif %}
+  </nav>
+
+  <div class="sidebar-user">
+    <div class="user-avatar">{{ current_user.username[0]|upper }}</div>
+    <div class="user-info">
+      <span class="user-name">{{ current_user.username }}</span>
+      <span class="user-role badge-{{ current_user.role }}">{{ current_user.role }}</span>
+    </div>
+    <a href="{{ url_for('logout') }}" class="logout-btn" title="Logout">
+      <i class="fa-solid fa-right-from-bracket"></i>
+    </a>
+  </div>
+</aside>
+
+<!-- ── Mobile overlay ─────────────────────────────────────────────────────── -->
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
+
+<!-- ── Main content ───────────────────────────────────────────────────────── -->
+<div class="main-wrapper">
+  <header class="topbar">
+    <button class="hamburger" onclick="toggleSidebar()">
+      <i class="fa-solid fa-bars"></i>
+    </button>
+    <div class="topbar-title">{% block page_title %}Dashboard{% endblock %}</div>
+    <div class="topbar-right">
+      <div class="status-pill" id="simBadge" style="display:none">
+        <i class="fa-solid fa-flask-vial"></i> SIMULATION
+      </div>
+      <div class="status-pill" id="pcStatus">
+        <span class="dot dot-grey"></span> PC
+      </div>
+      <div class="topbar-time" id="topbarTime"></div>
+    </div>
+  </header>
+
+  <!-- Flash messages -->
+  <div class="flash-container">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for cat, msg in messages %}
+      <div class="flash flash-{{ cat }}">
+        <i class="fa-solid fa-{% if cat == 'success' %}check-circle{% elif cat == 'danger' %}exclamation-circle{% elif cat == 'warning' %}triangle-exclamation{% else %}info-circle{% endif %}"></i>
+        {{ msg }}
+        <button onclick="this.parentElement.remove()">&times;</button>
+      </div>
+      {% endfor %}
+    {% endwith %}
+  </div>
+
+  <main class="content">
+    {% block content %}{% endblock %}
+  </main>
+</div>
+
+{% else %}
+  {% block auth_content %}{% endblock %}
+{% endif %}
+
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+{% block extra_js %}{% endblock %}
+</body>
+</html>

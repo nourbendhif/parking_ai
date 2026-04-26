@@ -1,0 +1,168 @@
+{% extends "base.html" %}
+{% block title %}Events – ParkSense AI{% endblock %}
+{% block page_title %}Parking Events{% endblock %}
+
+{% block content %}
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+  <div>
+    <h2 style="font-family:var(--font-mono);font-size:16px;color:var(--text-primary)">Detection Events</h2>
+    <p style="font-size:13px;color:var(--text-muted);margin-top:2px">All detection and gate access records</p>
+  </div>
+  <div style="display:flex;gap:8px">
+    <button class="btn btn-secondary" onclick="exportCSV()">
+      <i class="fa-solid fa-download"></i> Export CSV
+    </button>
+  </div>
+</div>
+
+<div class="card">
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Timestamp</th>
+          <th>Plate</th>
+          <th>Event</th>
+          <th>Gate</th>
+          <th>Confidence</th>
+          <th>Process (ms)</th>
+          <th>Mode</th>
+          <th>Notes</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for e in events.items %}
+        <tr>
+          <td class="mono" style="color:var(--text-muted)">{{ e.id }}</td>
+          <td style="white-space:nowrap;color:var(--text-muted);font-size:12px">
+            {{ e.timestamp.strftime('%Y-%m-%d') }}<br>
+            <span class="mono">{{ e.timestamp.strftime('%H:%M:%S') }}</span>
+          </td>
+          <td>
+            <span class="mono" style="font-weight:700;font-size:14px;color:var(--text-primary)">
+              {{ e.license_plate or '—' }}
+            </span>
+          </td>
+          <td>
+            <span class="badge {% if e.event_type == 'entry' %}badge-success{% elif e.event_type == 'denied' %}badge-danger{% else %}badge-muted{% endif %}">
+              {{ e.event_type|upper }}
+            </span>
+          </td>
+          <td>
+            {% if e.gate_opened %}
+            <span class="badge badge-success"><i class="fa-solid fa-lock-open"></i> OPENED</span>
+            {% else %}
+            <span class="badge badge-muted"><i class="fa-solid fa-lock"></i> CLOSED</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if e.confidence %}
+            <div style="display:flex;align-items:center;gap:8px">
+              <div class="progress-bar-wrap" style="width:50px">
+                <div class="progress-bar" style="width:{{ (e.confidence * 100)|int }}%;background:{% if e.confidence > 0.8 %}#22c55e{% elif e.confidence > 0.6 %}var(--accent4){% else %}var(--accent3){% endif %}"></div>
+              </div>
+              <span class="mono" style="font-size:11px;color:var(--text-secondary)">{{ '%.0f%%'|format(e.confidence*100) }}</span>
+            </div>
+            {% else %}—{% endif %}
+          </td>
+          <td class="mono" style="color:var(--text-secondary);font-size:12px">
+            {{ e.processing_ms or '—' }}
+          </td>
+          <td>
+            {% if e.simulated %}
+            <span class="badge badge-sim"><i class="fa-solid fa-flask-vial"></i> SIM</span>
+            {% else %}
+            <span class="badge badge-muted">REAL</span>
+            {% endif %}
+          </td>
+          <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:var(--text-muted)">
+            {{ e.notes or '—' }}
+          </td>
+          <td>
+            {% if e.annotated_image %}
+            <button class="btn btn-sm btn-secondary" onclick="showImage('{{ e.annotated_image }}', '{{ e.license_plate }}')">
+              <i class="fa-solid fa-image"></i>
+            </button>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="10" style="text-align:center;color:var(--text-muted);padding:32px">No events recorded</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Pagination -->
+  {% if events.pages > 1 %}
+  <div style="padding:16px 20px;border-top:1px solid var(--border);display:flex;gap:6px;align-items:center">
+    {% if events.has_prev %}
+    <a href="{{ url_for('admin_events', page=events.prev_num) }}" class="page-btn">← Prev</a>
+    {% endif %}
+
+    {% for p in events.iter_pages(left_edge=2, right_edge=2, left_current=2, right_current=2) %}
+      {% if p %}
+      <a href="{{ url_for('admin_events', page=p) }}" class="page-btn {% if p == events.page %}active{% endif %}">{{ p }}</a>
+      {% else %}
+      <span style="color:var(--text-muted);padding:0 4px">…</span>
+      {% endif %}
+    {% endfor %}
+
+    {% if events.has_next %}
+    <a href="{{ url_for('admin_events', page=events.next_num) }}" class="page-btn">Next →</a>
+    {% endif %}
+    <span style="margin-left:auto;font-size:12px;color:var(--text-muted)">{{ events.total }} total events</span>
+  </div>
+  {% endif %}
+</div>
+
+<!-- Image preview modal -->
+<div class="modal-backdrop" id="imageModal">
+  <div class="modal" style="max-width:700px;width:90vw">
+    <div class="modal-header">
+      <span class="modal-title" id="imageModalTitle">Detection Image</span>
+      <button class="modal-close" onclick="closeModal('imageModal')">&times;</button>
+    </div>
+    <div class="modal-body" style="padding:12px">
+      <img id="modalImage" src="" alt="Detection" style="width:100%;border-radius:6px"/>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function showImage(b64, plate) {
+  document.getElementById('modalImage').src = 'data:image/jpeg;base64,' + b64;
+  document.getElementById('imageModalTitle').textContent = `Detection – ${plate}`;
+  openModal('imageModal');
+}
+
+function exportCSV() {
+  const rows = [['ID','Timestamp','Plate','Event','Gate','Confidence','Processing ms','Mode','Notes']];
+  document.querySelectorAll('table tbody tr').forEach(tr => {
+    const cells = [...tr.querySelectorAll('td')];
+    if (cells.length < 9) return;
+    rows.push([
+      cells[0].textContent.trim(),
+      cells[1].textContent.replace(/\s+/g,' ').trim(),
+      cells[2].textContent.trim(),
+      cells[3].textContent.trim(),
+      cells[4].textContent.trim(),
+      cells[5].textContent.trim(),
+      cells[6].textContent.trim(),
+      cells[7].textContent.trim(),
+      cells[8].textContent.trim(),
+    ]);
+  });
+  const csv  = rows.map(r => r.map(c => `"${c}"`).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const a    = document.createElement('a');
+  a.href     = URL.createObjectURL(blob);
+  a.download = `parking_events_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+}
+</script>
+{% endblock %}

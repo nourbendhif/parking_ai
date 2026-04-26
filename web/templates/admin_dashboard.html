@@ -1,0 +1,222 @@
+{% extends "base.html" %}
+{% block title %}Admin Analytics – ParkSense AI{% endblock %}
+{% block page_title %}Admin Analytics{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<!-- Stat cards -->
+<div class="stats-grid mb-6">
+  <div class="stat-card accent-teal">
+    <div class="stat-label">Total Events</div>
+    <div class="stat-value">{{ event_count }}</div>
+    <i class="fa-solid fa-bolt stat-icon"></i>
+  </div>
+  <div class="stat-card accent-purple">
+    <div class="stat-label">Users</div>
+    <div class="stat-value">{{ user_count }}</div>
+    <i class="fa-solid fa-users stat-icon"></i>
+  </div>
+  <div class="stat-card accent-green">
+    <div class="stat-label">Vehicles</div>
+    <div class="stat-value">{{ vehicle_count }}</div>
+    <i class="fa-solid fa-car stat-icon"></i>
+  </div>
+  <div class="stat-card accent-orange">
+    <div class="stat-label">Log Entries</div>
+    <div class="stat-value">{{ log_count }}</div>
+    <i class="fa-solid fa-terminal stat-icon"></i>
+  </div>
+</div>
+
+<div class="grid-2 mb-6">
+  <!-- 7-day events chart -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title"><i class="fa-solid fa-chart-bar" style="margin-right:6px"></i>Events – Last 7 Days</span>
+    </div>
+    <div class="card-body">
+      <div class="chart-container" style="height:220px">
+        <canvas id="eventsChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- System status -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title"><i class="fa-solid fa-server" style="margin-right:6px"></i>System Status</span>
+      <button class="btn btn-sm btn-secondary" onclick="refreshStatus()">
+        <i class="fa-solid fa-rotate-right"></i> Refresh
+      </button>
+    </div>
+    <div class="card-body" id="statusBody">
+      <div style="display:flex;flex-direction:column;gap:14px">
+        <div class="status-row">
+          <span style="color:var(--text-muted);font-size:13px">Simulation Mode</span>
+          <span class="badge {% if sim_mode %}badge-warning{% else %}badge-success{% endif %}">
+            {% if sim_mode %}ACTIVE{% else %}DISABLED{% endif %}
+          </span>
+        </div>
+        <div class="status-row">
+          <span style="color:var(--text-muted);font-size:13px">PC AI Server</span>
+          <span class="badge badge-muted" id="pcStatusBadge">CHECKING…</span>
+        </div>
+        <div class="status-row">
+          <span style="color:var(--text-muted);font-size:13px">Sensor</span>
+          <span class="badge badge-muted" id="sensorStatusBadge">CHECKING…</span>
+        </div>
+        <div class="status-row">
+          <span style="color:var(--text-muted);font-size:13px">Gate</span>
+          <span class="badge badge-muted" id="gateStatusBadge">CHECKING…</span>
+        </div>
+        <div class="status-row">
+          <span style="color:var(--text-muted);font-size:13px">Sim Loop</span>
+          <span class="badge badge-muted" id="simLoopBadge">CHECKING…</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Simulation control panel -->
+<div class="sim-panel mb-6">
+  <div class="sim-header">
+    <i class="fa-solid fa-flask-vial"></i>
+    <h3>Simulation Control Center</h3>
+    <span class="badge badge-warning" style="margin-left:auto">ADMIN ONLY</span>
+  </div>
+  <p style="font-size:13px;color:var(--text-secondary);margin-bottom:16px">
+    Manually trigger simulation events and control the virtual hardware state without needing physical sensors.
+  </p>
+  <div class="sim-controls">
+    <button class="btn btn-warning" onclick="fireSimEvent()">
+      <i class="fa-solid fa-play"></i> Fire Sim Event
+    </button>
+    <button class="btn btn-secondary" onclick="simVehicle(true)">
+      <i class="fa-solid fa-car-side"></i> Place Vehicle
+    </button>
+    <button class="btn btn-secondary" onclick="simVehicle(false)">
+      <i class="fa-solid fa-road"></i> Clear Vehicle
+    </button>
+    <button class="btn btn-primary" onclick="manualGate('open')">
+      <i class="fa-solid fa-lock-open"></i> Open Gate
+    </button>
+    <button class="btn btn-secondary" onclick="manualGate('close')">
+      <i class="fa-solid fa-lock"></i> Close Gate
+    </button>
+    <a href="{{ url_for('admin_settings') }}" class="btn btn-secondary">
+      <i class="fa-solid fa-sliders"></i> Sim Settings
+    </a>
+  </div>
+  <div id="simFeedback" style="margin-top:14px;font-family:var(--font-mono);font-size:12px;color:var(--accent);min-height:20px"></div>
+</div>
+
+<!-- Recent logs -->
+<div class="card">
+  <div class="card-header">
+    <span class="card-title"><i class="fa-solid fa-terminal" style="margin-right:6px"></i>Live System Logs</span>
+    <a href="{{ url_for('admin_logs') }}" class="btn btn-sm btn-secondary">Full Logs</a>
+  </div>
+  <div class="card-body" style="padding:12px">
+    <div class="log-feed" id="adminLogFeed" style="max-height:220px"></div>
+  </div>
+</div>
+
+<style>
+.status-row { display:flex; align-items:center; justify-content:space-between;
+  padding:8px 0; border-bottom:1px solid var(--border); }
+.status-row:last-child { border-bottom:none; }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Chart
+const chartData = {{ chart_data|safe }};
+new Chart(document.getElementById('eventsChart'), {
+  type: 'bar',
+  data: {
+    labels: chartData.map(d => d.date),
+    datasets: [{
+      label: 'Total',
+      data: chartData.map(d => d.count),
+      backgroundColor: 'rgba(0,212,180,.3)',
+      borderColor: 'rgba(0,212,180,1)',
+      borderWidth: 1.5,
+      borderRadius: 4,
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { grid: { color: 'rgba(255,255,255,.04)' }, ticks: { color: '#8890a8', font: { family: 'Space Mono', size: 10 } } },
+      y: { grid: { color: 'rgba(255,255,255,.04)' }, ticks: { color: '#8890a8', font: { family: 'Space Mono', size: 10 } }, beginAtZero: true }
+    }
+  }
+});
+
+// Status
+async function refreshStatus() {
+  const res  = await fetch('/api/status');
+  const data = await res.json();
+
+  document.getElementById('pcStatusBadge').textContent  = data.pc_online ? 'ONLINE' : 'OFFLINE';
+  document.getElementById('pcStatusBadge').className    = `badge badge-${data.pc_online ? 'success' : 'danger'}`;
+
+  const dist = data.sensor?.distance_m ?? '--';
+  document.getElementById('sensorStatusBadge').textContent = `${dist}m`;
+  document.getElementById('sensorStatusBadge').className   = 'badge badge-info';
+
+  document.getElementById('gateStatusBadge').textContent = data.gate?.is_open ? 'OPEN' : 'CLOSED';
+  document.getElementById('gateStatusBadge').className   = `badge badge-${data.gate?.is_open ? 'success' : 'muted'}`;
+
+  document.getElementById('simLoopBadge').textContent = data.sim_loop_running ? 'RUNNING' : 'STOPPED';
+  document.getElementById('simLoopBadge').className   = `badge badge-${data.sim_loop_running ? 'warning' : 'muted'}`;
+}
+
+async function fireSimEvent() {
+  const fb = document.getElementById('simFeedback');
+  fb.textContent = 'Firing simulation event…';
+  const res  = await fetch('/api/simulate_event', { method: 'POST' });
+  const data = await res.json();
+  fb.textContent = data.success
+    ? `✓ Event fired | Plate: ${data.plate || 'N/A'} | ${data.authorized ? 'AUTHORIZED' : 'DENIED'}`
+    : `✗ Error: ${data.error}`;
+  loadLogs();
+}
+
+async function simVehicle(present) {
+  await fetch('/api/sensor/sim', { method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ vehicle_present: present }) });
+  document.getElementById('simFeedback').textContent = present ? '🚗 Virtual vehicle placed' : '🛣 Vehicle cleared';
+}
+
+async function manualGate(action) {
+  await fetch(`/api/gate/${action}`, { method: 'POST' });
+  document.getElementById('simFeedback').textContent = `Gate ${action.toUpperCase()} command sent`;
+  refreshStatus();
+}
+
+async function loadLogs() {
+  const res  = await fetch('/api/logs/recent?limit=30');
+  const logs = await res.json();
+  const feed = document.getElementById('adminLogFeed');
+  feed.innerHTML = logs.map(l => `
+    <div class="log-entry">
+      <span class="log-ts">${new Date(l.timestamp).toLocaleTimeString()}</span>
+      <span class="log-lvl-${l.level}">${l.level}</span>
+      <span class="log-msg">[${l.component}] ${l.message}</span>
+    </div>`).join('');
+}
+
+refreshStatus();
+loadLogs();
+setInterval(refreshStatus, 10000);
+setInterval(loadLogs, 8000);
+</script>
+{% endblock %}

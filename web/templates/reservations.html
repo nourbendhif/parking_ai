@@ -1,0 +1,457 @@
+{% extends "base.html" %}
+
+{% block title %}Reservations – ParkSense AI{% endblock %}
+{% block page_title %}Parking Reservations{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.css">
+<style>
+/* ── Reservation grid ── */
+.reservation-grid {
+  display: grid;
+  grid-template-columns: 1.8fr 1fr;
+  gap: 24px;
+  align-items: start;
+}
+
+/* ── FullCalendar dark theme overrides ── */
+.fc {
+  --fc-border-color:            rgba(255,255,255,.07);
+  --fc-daygrid-event-dot-width: 8px;
+  --fc-today-bg-color:          rgba(0,212,180,.08);
+  --fc-event-bg-color:          #22c55e;
+  --fc-event-border-color:      #22c55e;
+  --fc-event-text-color:        #000;
+  --fc-button-bg-color:         #1d2028;
+  --fc-button-border-color:     rgba(255,255,255,.1);
+  --fc-button-text-color:       #8890a8;
+  --fc-button-hover-bg-color:   rgba(0,212,180,.15);
+  --fc-button-hover-border-color: rgba(0,212,180,.4);
+  --fc-button-active-bg-color:  rgba(0,212,180,.2);
+  --fc-button-active-border-color: var(--accent);
+  --fc-page-bg-color:           transparent;
+  --fc-neutral-bg-color:        #161820;
+  --fc-list-event-hover-bg-color: #1d2028;
+  --fc-non-business-color:      rgba(255,255,255,.02);
+  color: var(--text-secondary);
+  font-family: var(--font-body);
+  font-size: 13px;
+}
+.fc .fc-toolbar-title        { font-family: var(--font-mono); font-size: 14px; color: var(--text-primary); }
+.fc .fc-col-header-cell-cushion { color: var(--text-muted); font-family: var(--font-mono); font-size: 10px; letter-spacing:.08em; text-transform: uppercase; }
+.fc .fc-daygrid-day-number   { color: var(--text-secondary); font-size: 12px; }
+.fc .fc-daygrid-day.fc-day-today .fc-daygrid-day-number { color: var(--accent); font-weight: 700; }
+.fc .fc-button               { border-radius: var(--radius) !important; font-size: 12px !important; padding: 5px 10px !important; font-family: var(--font-mono) !important; }
+.fc .fc-button:focus         { box-shadow: 0 0 0 2px rgba(0,212,180,.25) !important; }
+.fc .fc-event                { border-radius: 4px !important; font-size: 11px !important; cursor: pointer; }
+.fc .fc-timegrid-slot        { height: 28px !important; }
+.fc .fc-daygrid-day-frame    { min-height: 70px; }
+
+/* ── Panel ── */
+.reservation-panel .field-row     { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+.reservation-panel .field-row label { font-size: 11px; font-family: var(--font-mono); color: var(--text-muted); letter-spacing: .06em; text-transform: uppercase; margin-bottom: 2px; }
+.reservation-panel input,
+.reservation-panel select          { width: 100%; }
+.reservation-status               { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border); }
+.reservation-card-list            { max-height: 320px; overflow: auto; margin-top: 10px; }
+.reservation-card-item            { padding: 10px 12px; border-bottom: 1px solid var(--border); }
+.reservation-card-item:last-child { border-bottom: none; }
+
+/* ── Calendar min height ── */
+#calendar { min-height: 520px; }
+
+@media (max-width: 900px) {
+  .reservation-grid { grid-template-columns: 1fr; }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="card mb-6">
+  <div class="card-header">
+    <span class="card-title"><i class="fa-solid fa-calendar-days" style="margin-right:6px"></i>Reservations</span>
+  </div>
+  <div class="card-body">
+    <p class="text-muted" style="font-size:13px;color:var(--text-secondary)">
+      Book a parking slot, view upcoming reservations and manage availability from the calendar.
+      Click a date on the calendar to auto-fill the start time.
+    </p>
+  </div>
+</div>
+
+<div class="reservation-grid">
+
+  <!-- ── Calendar ── -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title"><i class="fa-solid fa-calendar-week" style="margin-right:6px"></i>Reservation Calendar</span>
+      <div style="display:flex;gap:8px;align-items:center">
+        <span class="badge badge-success" style="font-size:10px">
+          <span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#22c55e;margin-right:4px"></span>Active
+        </span>
+        <span class="badge badge-muted" style="font-size:10px">
+          <span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#777;margin-right:4px"></span>Other
+        </span>
+      </div>
+    </div>
+    <div class="card-body" style="padding:16px">
+      <div id="calendar"></div>
+    </div>
+  </div>
+
+  <!-- ── Booking Panel ── -->
+  <div class="card reservation-panel">
+    <div class="card-header">
+      <span class="card-title"><i class="fa-solid fa-plus-circle" style="margin-right:6px"></i>Book a Slot</span>
+    </div>
+    <div class="card-body">
+
+      {% if vehicles | length == 0 %}
+      <div class="flash flash-warning" style="margin-bottom:16px">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+        No vehicles registered. Add a vehicle first to book a reservation.
+      </div>
+      {% endif %}
+
+      <!-- Vehicle -->
+      <div class="field-row">
+        <label for="vehicleSelect">Vehicle</label>
+        <select id="vehicleSelect" {% if vehicles | length == 0 %}disabled{% endif %}>
+          <option value="">— Select vehicle —</option>
+          {% for vehicle in vehicles %}
+          <option value="{{ vehicle.id }}">{{ vehicle.license_plate }} – {{ vehicle.owner_name or 'No owner' }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <!-- Matricule / Reference -->
+      <div class="field-row">
+        <label for="matriculeInput">Matricule / Reference <span style="color:var(--accent4)">(optional)</span></label>
+        <input id="matriculeInput" type="text" placeholder="e.g. REF-2024-001 or your ID"
+               style="text-transform:uppercase" maxlength="40"
+               {% if vehicles | length == 0 %}disabled{% endif %} />
+        <span style="font-size:11px;color:var(--text-muted)">Personal reference number or ID for this reservation</span>
+      </div>
+
+      <!-- Slot -->
+      <div class="field-row">
+        <label for="slotSelect">Parking Slot</label>
+        <select id="slotSelect" {% if vehicles | length == 0 %}disabled{% endif %}>
+          <option value="">— Select slot —</option>
+          {% for slot in available_slots %}
+          <option value="{{ slot }}">Slot {{ slot }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <!-- Start time -->
+      <div class="field-row">
+        <label for="startTime">Start Date &amp; Time</label>
+        <input id="startTime" type="datetime-local" {% if vehicles | length == 0 %}disabled{% endif %} />
+      </div>
+
+      <!-- End time -->
+      <div class="field-row">
+        <label for="endTime">End Date &amp; Time</label>
+        <input id="endTime" type="datetime-local" {% if vehicles | length == 0 %}disabled{% endif %} />
+        <span id="durationLabel" style="font-size:11px;color:var(--text-muted)"></span>
+      </div>
+
+      <!-- Notes -->
+      <div class="field-row">
+        <label for="notesInput">Notes <span style="color:var(--accent4)">(optional)</span></label>
+        <input id="notesInput" type="text" placeholder="Any special instructions…"
+               maxlength="200" {% if vehicles | length == 0 %}disabled{% endif %} />
+      </div>
+
+      <button id="bookReservationBtn" class="btn btn-primary" style="width:100%;justify-content:center"
+              onclick="bookReservation()" {% if vehicles | length == 0 %}disabled{% endif %}>
+        <i class="fa-solid fa-check"></i> Reserve Parking
+      </button>
+
+      <div id="reservationMessage" style="margin-top:12px"></div>
+
+      <!-- Upcoming list -->
+      <div class="reservation-status">
+        <span style="font-family:var(--font-mono);font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em">
+          Upcoming Reservations
+        </span>
+        <button class="btn btn-sm btn-secondary" onclick="refreshReservations()">
+          <i class="fa-solid fa-rotate-right"></i>
+        </button>
+      </div>
+
+      <div class="reservation-card-list" id="upcomingList">
+        {% if upcoming %}
+          {% for reservation in upcoming %}
+          <div class="reservation-card-item">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <strong style="font-family:var(--font-mono);font-size:13px;color:var(--text-primary)">
+                {{ reservation.slot_id }}
+              </strong>
+              <span class="badge badge-{{ 'success' if reservation.status == 'active' else 'muted' }}">
+                {{ reservation.status | capitalize }}
+              </span>
+            </div>
+            <div style="font-size:12px;color:var(--text-secondary);margin-top:4px">
+              {{ reservation.vehicle.license_plate if reservation.vehicle else 'Unknown' }}
+              {% if reservation.reference %}
+              <span style="color:var(--text-muted)"> · {{ reservation.reference }}</span>
+              {% endif %}
+            </div>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:2px">
+              {{ reservation.start_time.strftime('%Y-%m-%d %H:%M') }} →
+              {{ reservation.end_time.strftime('%H:%M') if reservation.end_time else '?' }}
+            </div>
+          </div>
+          {% endfor %}
+        {% else %}
+          <div class="reservation-card-item text-muted" style="text-align:center;padding:20px;color:var(--text-muted);font-size:13px">
+            No upcoming reservations
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js"></script>
+<script>
+const VEHICLES            = {{ vehicles_json | tojson }};
+const AVAILABLE_SLOTS     = {{ available_slots | tojson }};
+const RESERVATION_EVENTS_URL = '/api/reservations/events';
+const RESERVATION_BOOK_URL   = '/api/reservations/book';
+
+// ── Datetime helpers ─────────────────────────────────────────────────────────
+function formatLocalDatetime(date) {
+  const pad = n => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth()+1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function setDefaultReservationTimes() {
+  const now = new Date();
+  // Round up to next 30-min block
+  now.setMinutes(now.getMinutes() + 30 - (now.getMinutes() % 30), 0, 0);
+  const later = new Date(now.getTime() + 60 * 60 * 1000);
+  document.getElementById('startTime').value = formatLocalDatetime(now);
+  document.getElementById('endTime').value   = formatLocalDatetime(later);
+  updateDurationLabel();
+}
+
+function updateDurationLabel() {
+  const s = document.getElementById('startTime').value;
+  const e = document.getElementById('endTime').value;
+  if (!s || !e) { document.getElementById('durationLabel').textContent = ''; return; }
+  const diff = (new Date(e) - new Date(s)) / 3600000;
+  if (diff <= 0) {
+    document.getElementById('durationLabel').textContent = '⚠ End must be after start';
+    document.getElementById('durationLabel').style.color = 'var(--accent3)';
+  } else {
+    const h = Math.floor(diff), m = Math.round((diff - h) * 60);
+    document.getElementById('durationLabel').textContent =
+      `Duration: ${h > 0 ? h + 'h ' : ''}${m > 0 ? m + 'm' : ''}`;
+    document.getElementById('durationLabel').style.color = 'var(--text-muted)';
+  }
+}
+
+document.getElementById('startTime')?.addEventListener('change', updateDurationLabel);
+document.getElementById('endTime')?.addEventListener('change', updateDurationLabel);
+
+// ── Message helper ────────────────────────────────────────────────────────────
+function showMessage(text, type = 'info') {
+  const container = document.getElementById('reservationMessage');
+  container.innerHTML = `<div class="flash flash-${type}">${text}</div>`;
+  setTimeout(() => {
+    const el = container.querySelector('.flash');
+    if (el) { el.style.transition='opacity .4s'; el.style.opacity='0'; setTimeout(()=>el.remove(),400); }
+  }, 5000);
+}
+
+// ── Refresh upcoming list ─────────────────────────────────────────────────────
+async function refreshReservations() {
+  try {
+    const response = await fetch(RESERVATION_EVENTS_URL);
+    if (!response.ok) throw new Error('Unable to refresh reservations');
+    const events = await response.json();
+    const list   = document.getElementById('upcomingList');
+
+    if (!events.length) {
+      list.innerHTML = `<div class="reservation-card-item" style="text-align:center;padding:20px;color:var(--text-muted);font-size:13px">No upcoming reservations</div>`;
+      return;
+    }
+
+    list.innerHTML = events.slice(0, 15).map(ev => {
+      const start = new Date(ev.start).toLocaleString([], {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
+      const end   = new Date(ev.end).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+      const refBadge = ev.reference ? `<span style="color:var(--text-muted)"> · ${ev.reference}</span>` : '';
+      return `
+        <div class="reservation-card-item">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <strong style="font-family:var(--font-mono);font-size:13px;color:var(--text-primary)">${ev.slot_id}</strong>
+            <span class="badge badge-${ev.status === 'active' ? 'success' : 'muted'}">${ev.status}</span>
+          </div>
+          <div style="font-size:12px;color:var(--text-secondary);margin-top:4px">
+            ${ev.vehicle?.license_plate || 'Unknown'}${refBadge}
+          </div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:2px">${start} → ${end}</div>
+        </div>`;
+    }).join('');
+  } catch (err) {
+    showMessage(err.message, 'danger');
+  }
+}
+
+// ── Book reservation ──────────────────────────────────────────────────────────
+async function bookReservation() {
+  const vehicleId  = document.getElementById('vehicleSelect').value;
+  const slotId     = document.getElementById('slotSelect').value;
+  const startTime  = document.getElementById('startTime').value;
+  const endTime    = document.getElementById('endTime').value;
+  const matricule  = document.getElementById('matriculeInput').value.trim().toUpperCase();
+  const notes      = document.getElementById('notesInput').value.trim();
+
+  if (!vehicleId)  { showMessage('Please select a vehicle.', 'danger'); return; }
+  if (!slotId)     { showMessage('Please select a parking slot.', 'danger'); return; }
+  if (!startTime)  { showMessage('Please set a start time.', 'danger'); return; }
+  if (!endTime)    { showMessage('Please set an end time.', 'danger'); return; }
+
+  if (new Date(endTime) <= new Date(startTime)) {
+    showMessage('End time must be after start time.', 'danger');
+    return;
+  }
+
+  const btn = document.getElementById('bookReservationBtn');
+  btn.disabled   = true;
+  btn.innerHTML  = '<i class="fa-solid fa-circle-notch fa-spin"></i> Booking…';
+
+  const body = {
+    vehicle_id: Number(vehicleId),
+    slot_id:    slotId,
+    start_time: startTime,
+    end_time:   endTime,
+    reference:  matricule || null,
+    notes:      notes     || null,
+  };
+
+  try {
+    const response = await fetch(RESERVATION_BOOK_URL, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(body),
+    });
+    const result = await response.json();
+    if (!response.ok || !result.success) {
+      showMessage(`<i class="fa-solid fa-exclamation-circle"></i> ${result.error || 'Reservation failed.'}`, 'danger');
+    } else {
+      showMessage(`<i class="fa-solid fa-check-circle"></i> Reservation confirmed for slot <strong>${slotId}</strong>!`, 'success');
+      // Reset matricule & notes
+      document.getElementById('matriculeInput').value = '';
+      document.getElementById('notesInput').value     = '';
+      // Refresh calendar & list
+      if (calendar) calendar.refetchEvents();
+      refreshReservations();
+    }
+  } catch (err) {
+    showMessage(`<i class="fa-solid fa-triangle-exclamation"></i> Booking request failed: ${err.message}`, 'danger');
+  } finally {
+    btn.disabled  = false;
+    btn.innerHTML = '<i class="fa-solid fa-check"></i> Reserve Parking';
+  }
+}
+
+// ── FullCalendar init ─────────────────────────────────────────────────────────
+let calendar;
+
+function initCalendar() {
+  const calendarEl = document.getElementById('calendar');
+  if (!calendarEl) return;
+
+  calendar = new FullCalendar.Calendar(calendarEl, {
+    initialView:    'dayGridMonth',
+    height:         'auto',
+    themeSystem:    'standard',
+    headerToolbar: {
+      left:   'prev,next today',
+      center: 'title',
+      right:  'dayGridMonth,timeGridWeek,listWeek',
+    },
+    selectable:  true,
+    selectMirror: true,
+
+    // When user selects a range, fill the form
+    select: info => {
+      const startStr = info.startStr.length >= 16 ? info.startStr.slice(0, 16) : info.startStr + 'T09:00';
+      const endMs    = new Date(info.end) - 1;  // FullCalendar end is exclusive
+      const endDate  = new Date(endMs);
+      // If same-day click, set 1h duration
+      if (info.start.toDateString() === new Date(endMs).toDateString()) {
+        const s = new Date(info.startStr);
+        s.setHours(9, 0, 0, 0);
+        const e = new Date(s.getTime() + 3600000);
+        document.getElementById('startTime').value = formatLocalDatetime(s);
+        document.getElementById('endTime').value   = formatLocalDatetime(e);
+      } else {
+        const s = new Date(info.startStr);
+        s.setHours(9, 0, 0, 0);
+        const e = new Date(endDate);
+        e.setHours(18, 0, 0, 0);
+        document.getElementById('startTime').value = formatLocalDatetime(s);
+        document.getElementById('endTime').value   = formatLocalDatetime(e);
+      }
+      updateDurationLabel();
+      // Scroll to form on mobile
+      document.querySelector('.reservation-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    },
+
+    // Event source
+    events: {
+      url:     RESERVATION_EVENTS_URL,
+      failure: () => showMessage('<i class="fa-solid fa-triangle-exclamation"></i> Unable to load calendar events.', 'warning'),
+    },
+
+    // Colour events by status
+    eventDidMount: info => {
+      const status = info.event.extendedProps?.status;
+      if (status !== 'active') {
+        info.el.style.backgroundColor = '#555';
+        info.el.style.borderColor     = '#555';
+      }
+    },
+
+    // Click event — show details
+    eventClick: info => {
+      const ev    = info.event;
+      const props = ev.extendedProps;
+      const start = ev.start ? ev.start.toLocaleString() : '?';
+      const end   = ev.end   ? ev.end.toLocaleString()   : '?';
+      const ref   = props.reference ? `\nReference: ${props.reference}` : '';
+      alert(`Slot: ${props.slot_id || ev.title}\nVehicle: ${props.vehicle?.license_plate || 'Unknown'}${ref}\nFrom: ${start}\nTo:   ${end}\nStatus: ${props.status}`);
+    },
+
+    eventColor:        '#22c55e',
+    eventTextColor:    '#000',
+    eventBorderColor:  '#1ea34f',
+    nowIndicator:      true,
+    businessHours:     { daysOfWeek: [1, 2, 3, 4, 5, 6], startTime: '07:00', endTime: '22:00' },
+  });
+
+  calendar.render();
+}
+
+// ── Matricule auto-uppercase ──────────────────────────────────────────────────
+document.getElementById('matriculeInput')?.addEventListener('input', function() {
+  const pos = this.selectionStart;
+  this.value = this.value.toUpperCase();
+  this.setSelectionRange(pos, pos);
+});
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', () => {
+  setDefaultReservationTimes();
+  initCalendar();
+  refreshReservations();
+});
+</script>
+{% endblock %}

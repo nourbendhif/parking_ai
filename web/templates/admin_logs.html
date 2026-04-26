@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+{% block title %}Logs – ParkSense AI{% endblock %}
+{% block page_title %}System Logs{% endblock %}
+
+{% block content %}
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+  <div>
+    <h2 style="font-family:var(--font-mono);font-size:16px;color:var(--text-primary)">System Logs</h2>
+    <p style="font-size:13px;color:var(--text-muted);margin-top:2px">Real-time component activity log</p>
+  </div>
+  <div style="display:flex;gap:8px;align-items:center">
+    <div id="autoRefreshToggle" style="display:flex;align-items:center;gap:8px">
+      <label class="toggle">
+        <input type="checkbox" id="autoRefresh" checked onchange="toggleAutoRefresh(this.checked)"/>
+        <span class="toggle-slider"></span>
+      </label>
+      <span style="font-size:13px;color:var(--text-secondary)">Auto-refresh</span>
+    </div>
+  </div>
+</div>
+
+<!-- Level filter -->
+<div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
+  {% for level in ['', 'INFO', 'WARNING', 'ERROR', 'DEBUG'] %}
+  <a href="{{ url_for('admin_logs', level=level) }}"
+     class="btn btn-sm {% if current_level == level %}btn-primary{% else %}btn-secondary{% endif %}">
+    {% if level == '' %}All
+    {% elif level == 'INFO' %}<i class="fa-solid fa-info-circle"></i> Info
+    {% elif level == 'WARNING' %}<i class="fa-solid fa-triangle-exclamation"></i> Warning
+    {% elif level == 'ERROR' %}<i class="fa-solid fa-exclamation-circle"></i> Error
+    {% else %}<i class="fa-solid fa-bug"></i> Debug{% endif %}
+  </a>
+  {% endfor %}
+</div>
+
+<!-- Live feed toggle -->
+<div class="card mb-4">
+  <div class="card-header">
+    <span class="card-title"><i class="fa-solid fa-circle" style="color:#22c55e;font-size:8px;margin-right:8px" class="pulse"></i>Live Feed</span>
+    <button class="btn btn-sm btn-secondary" onclick="clearLiveFeed()">Clear</button>
+  </div>
+  <div class="card-body" style="padding:12px">
+    <div class="log-feed" id="liveFeed" style="max-height:160px">
+      <div class="log-entry" style="color:var(--text-muted)">— Live feed active —</div>
+    </div>
+  </div>
+</div>
+
+<!-- Historical logs table -->
+<div class="card">
+  <div class="card-header">
+    <span class="card-title"><i class="fa-solid fa-database" style="margin-right:6px"></i>Log History</span>
+    <span style="font-size:12px;color:var(--text-muted)">{{ logs.total }} entries</span>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Timestamp</th>
+          <th>Level</th>
+          <th>Component</th>
+          <th>Message</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for log in logs.items %}
+        <tr>
+          <td class="mono" style="color:var(--text-muted)">{{ log.id }}</td>
+          <td style="white-space:nowrap;font-size:12px;color:var(--text-muted)">
+            {{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}
+          </td>
+          <td>
+            <span class="badge
+              {% if log.level == 'INFO' %}badge-info
+              {% elif log.level == 'WARNING' %}badge-warning
+              {% elif log.level == 'ERROR' %}badge-danger
+              {% else %}badge-muted{% endif %}">
+              {{ log.level }}
+            </span>
+          </td>
+          <td>
+            <span class="badge badge-muted mono">{{ log.component }}</span>
+          </td>
+          <td style="color:var(--text-secondary);font-size:13px;max-width:500px">
+            {{ log.message }}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:32px">No logs found</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if logs.pages > 1 %}
+  <div style="padding:16px 20px;border-top:1px solid var(--border);display:flex;gap:6px;align-items:center">
+    {% if logs.has_prev %}
+    <a href="{{ url_for('admin_logs', page=logs.prev_num, level=current_level) }}" class="page-btn">← Prev</a>
+    {% endif %}
+    {% for p in logs.iter_pages(left_edge=2, right_edge=2, left_current=2, right_current=2) %}
+      {% if p %}
+      <a href="{{ url_for('admin_logs', page=p, level=current_level) }}" class="page-btn {% if p == logs.page %}active{% endif %}">{{ p }}</a>
+      {% else %}<span style="color:var(--text-muted)">…</span>{% endif %}
+    {% endfor %}
+    {% if logs.has_next %}
+    <a href="{{ url_for('admin_logs', page=logs.next_num, level=current_level) }}" class="page-btn">Next →</a>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let autoRefreshInterval = null;
+let lastLogId = 0;
+
+function toggleAutoRefresh(enabled) {
+  if (enabled) {
+    autoRefreshInterval = setInterval(fetchNewLogs, 5000);
+  } else {
+    clearInterval(autoRefreshInterval);
+  }
+}
+
+async function fetchNewLogs() {
+  try {
+    const res  = await fetch('/api/logs/recent?limit=20');
+    const logs = await res.json();
+    const feed = document.getElementById('liveFeed');
+    const newLogs = logs.filter(l => l.id > lastLogId);
+    if (newLogs.length === 0) return;
+    lastLogId = Math.max(...logs.map(l => l.id));
+    newLogs.reverse().forEach(l => {
+      const el = document.createElement('div');
+      el.className = 'log-entry fade-in';
+      el.innerHTML = `
+        <span class="log-ts">${new Date(l.timestamp).toLocaleTimeString()}</span>
+        <span class="log-lvl-${l.level}">${l.level}</span>
+        <span style="color:var(--text-muted);font-size:10px">[${l.component}]</span>
+        <span class="log-msg">${l.message}</span>`;
+      feed.insertBefore(el, feed.firstChild);
+    });
+    while (feed.children.length > 80) feed.lastChild.remove();
+  } catch(e) {}
+}
+
+function clearLiveFeed() {
+  document.getElementById('liveFeed').innerHTML = '<div class="log-entry" style="color:var(--text-muted)">— Feed cleared —</div>';
+}
+
+// Init
+fetchNewLogs();
+toggleAutoRefresh(true);
+</script>
+{% endblock %}
