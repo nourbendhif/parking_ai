@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+{% block title %}My Vehicles – ParkSense AI{% endblock %}
+{% block page_title %}My Vehicles{% endblock %}
+
+{% block content %}
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+  <div>
+    <h2 style="font-family:var(--font-mono);font-size:16px;color:var(--text-primary)">My Registered Vehicles</h2>
+    <p style="font-size:13px;color:var(--text-muted);margin-top:2px">Register your license plates to use with parking reservations and AI detection</p>
+  </div>
+  <button class="btn btn-primary" onclick="openModal('addVehicleModal')">
+    <i class="fa-solid fa-plus"></i> Add Vehicle
+  </button>
+</div>
+
+{% if vehicles %}
+<div class="card mb-6">
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>License Plate</th>
+          <th>Owner Name</th>
+          <th>Type</th>
+          <th>Color</th>
+          <th>Access Status</th>
+          <th>Registered</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for v in vehicles %}
+        <tr>
+          <td>
+            <span class="mono" style="font-size:15px;font-weight:700;color:var(--text-primary);letter-spacing:.05em;direction:rtl">
+              {{ v.license_plate }}
+            </span>
+          </td>
+          <td style="color:var(--text-secondary)">{{ v.owner_name or '—' }}</td>
+          <td>
+            <span class="badge badge-muted">
+              <i class="fa-solid fa-{% if v.vehicle_type == 'truck' %}truck{% elif v.vehicle_type == 'motorcycle' %}motorcycle{% else %}car{% endif %}"></i>
+              {{ v.vehicle_type }}
+            </span>
+          </td>
+          <td>
+            {% if v.color %}
+            <div style="display:flex;align-items:center;gap:6px">
+              <div style="width:12px;height:12px;border-radius:50%;background:{{ v.color }};border:1px solid var(--border)"></div>
+              <span style="color:var(--text-secondary);font-size:13px">{{ v.color }}</span>
+            </div>
+            {% else %}—{% endif %}
+          </td>
+          <td>
+            <span class="badge {% if v.is_authorized %}badge-success{% else %}badge-danger{% endif %}">
+              {% if v.is_authorized %}
+              <i class="fa-solid fa-check"></i> AUTHORIZED
+              {% else %}
+              <i class="fa-solid fa-ban"></i> BLOCKED
+              {% endif %}
+            </span>
+          </td>
+          <td style="color:var(--text-muted);font-size:12px">{{ v.created_at.strftime('%Y-%m-%d') }}</td>
+          <td>
+            <form method="POST" action="{{ url_for('delete_my_vehicle', vid=v.id) }}"
+                  onsubmit="return confirm('Remove vehicle {{ v.license_plate }} from your account?')">
+              <button type="submit" class="btn btn-sm btn-danger">
+                <i class="fa-solid fa-trash"></i> Remove
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="card mb-6">
+  <div class="card-body" style="text-align:center;padding:48px">
+    <i class="fa-solid fa-car-side" style="font-size:48px;color:var(--text-muted);opacity:.3;margin-bottom:16px"></i>
+    <h3 style="font-family:var(--font-mono);font-size:14px;color:var(--text-secondary);margin-bottom:8px">No Vehicles Registered</h3>
+    <p style="color:var(--text-muted);font-size:13px;margin-bottom:20px">Add your license plate(s) to reserve parking spots and enable AI detection authorization.</p>
+    <button class="btn btn-primary" onclick="openModal('addVehicleModal')">
+      <i class="fa-solid fa-plus"></i> Register First Vehicle
+    </button>
+  </div>
+</div>
+{% endif %}
+
+<!-- Info card -->
+<div class="card" style="background:rgba(0,212,180,.04);border-color:rgba(0,212,180,.15)">
+  <div class="card-body">
+    <div style="display:flex;gap:14px;align-items:flex-start">
+      <i class="fa-solid fa-circle-info" style="color:var(--accent);font-size:18px;flex-shrink:0;margin-top:2px"></i>
+      <div>
+        <div style="font-weight:600;margin-bottom:6px;color:var(--text-primary)">How Vehicle Registration Works</div>
+        <ul style="font-size:13px;color:var(--text-secondary);line-height:1.8;list-style:none;padding:0">
+          <li><i class="fa-solid fa-check" style="color:var(--accent);margin-right:8px"></i>Register your license plate(s) here (you can have multiple vehicles)</li>
+          <li><i class="fa-solid fa-check" style="color:var(--accent);margin-right:8px"></i>Use your plate to book parking reservations</li>
+          <li><i class="fa-solid fa-check" style="color:var(--accent);margin-right:8px"></i>The AI camera will recognize your plate and open the gate automatically</li>
+          <li><i class="fa-solid fa-check" style="color:var(--accent);margin-right:8px"></i>Supports Arabic Tunisian plates (تونس, صفاقس, etc.) with fuzzy OCR matching</li>
+          <li><i class="fa-solid fa-info-circle" style="color:var(--accent4);margin-right:8px"></i>Only you and admins can see your vehicle information</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Add Vehicle Modal -->
+<div class="modal-backdrop" id="addVehicleModal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title"><i class="fa-solid fa-car" style="margin-right:8px"></i>Register Vehicle</span>
+      <button class="modal-close" onclick="closeModal('addVehicleModal')">&times;</button>
+    </div>
+    <form method="POST" action="{{ url_for('add_my_vehicle') }}">
+      <div class="modal-body">
+        <div class="form-group">
+          <label>License Plate *</label>
+          <input type="text" name="license_plate" required placeholder="e.g. 195 تونس 4705 or ABC-1234"
+                 style="text-transform:uppercase;direction:rtl;text-align:right"/>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:4px">
+            Tunisian plates: enter exactly as on your car (e.g. 195 تونس 4705)
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Owner / Display Name</label>
+          <input type="text" name="owner_name" placeholder="Your name" value="{{ current_user.username }}"/>
+        </div>
+        <div class="form-group">
+          <label>Vehicle Type</label>
+          <select name="vehicle_type">
+            <option value="car">Car</option>
+            <option value="truck">Truck</option>
+            <option value="motorcycle">Motorcycle</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Color</label>
+          <div style="display:flex;gap:8px;align-items:center">
+            <input type="color" name="color" value="#3b82f6"
+                   style="width:48px;height:38px;padding:2px;border-radius:6px;cursor:pointer"/>
+            <span style="font-size:12px;color:var(--text-muted)">Pick vehicle color</span>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeModal('addVehicleModal')">Cancel</button>
+        <button type="submit" class="btn btn-primary"><i class="fa-solid fa-check"></i> Register</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

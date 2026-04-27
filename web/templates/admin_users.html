@@ -6,7 +6,7 @@
 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
   <div>
     <h2 style="font-family:var(--font-mono);font-size:16px;color:var(--text-primary)">Registered Users</h2>
-    <p style="font-size:13px;color:var(--text-muted);margin-top:2px">Manage accounts and roles</p>
+    <p style="font-size:13px;color:var(--text-muted);margin-top:2px">Manage accounts, roles and passwords</p>
   </div>
   <button class="btn btn-primary" onclick="openModal('createUserModal')">
     <i class="fa-solid fa-user-plus"></i> New User
@@ -62,15 +62,20 @@
             {{ user.created_at.strftime('%Y-%m-%d') }}
           </td>
           <td>
-            {% if user.id != current_user.id %}
-            <form method="POST" action="{{ url_for('admin_toggle_user', uid=user.id) }}" style="display:inline">
-              <button type="submit" class="btn btn-sm {% if user.is_active %}btn-danger{% else %}btn-secondary{% endif %}">
-                {{ 'Deactivate' if user.is_active else 'Activate' }}
+            <div style="display:flex;gap:6px">
+              <!-- Edit button -->
+              <button class="btn btn-sm btn-secondary"
+                      onclick="openEditModal({{ user.id }}, '{{ user.username }}', '{{ user.email }}', '{{ user.role }}')">
+                <i class="fa-solid fa-pen"></i>
               </button>
-            </form>
-            {% else %}
-            <span style="color:var(--text-muted);font-size:12px">—</span>
-            {% endif %}
+              {% if user.id != current_user.id %}
+              <form method="POST" action="{{ url_for('admin_toggle_user', uid=user.id) }}" style="display:inline">
+                <button type="submit" class="btn btn-sm {% if user.is_active %}btn-danger{% else %}btn-secondary{% endif %}">
+                  {{ 'Block' if user.is_active else 'Activate' }}
+                </button>
+              </form>
+              {% endif %}
+            </div>
           </td>
         </tr>
         {% else %}
@@ -117,4 +122,53 @@
     </form>
   </div>
 </div>
+
+<!-- Edit User Modal -->
+<div class="modal-backdrop" id="editUserModal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title"><i class="fa-solid fa-pen" style="margin-right:8px"></i>Edit User</span>
+      <button class="modal-close" onclick="closeModal('editUserModal')">&times;</button>
+    </div>
+    <form method="POST" id="editUserForm" action="">
+      <div class="modal-body">
+        <div class="form-group">
+          <label>Username</label>
+          <input type="text" name="username" id="editUsername" minlength="3" placeholder="New username (leave blank to keep)"/>
+        </div>
+        <div class="form-group">
+          <label>Email</label>
+          <input type="email" name="email" id="editEmail" placeholder="New email (leave blank to keep)"/>
+        </div>
+        <div class="form-group">
+          <label>Role</label>
+          <select name="role" id="editRole">
+            <option value="user">User</option>
+            <option value="admin">Admin</option>
+          </select>
+        </div>
+        <div style="border-top:1px solid var(--border);padding-top:16px;margin-top:8px">
+          <label style="color:var(--accent4)">New Password <span style="color:var(--text-muted);font-size:10px">(optional – leave blank to keep current)</span></label>
+          <input type="password" name="password" minlength="6" placeholder="Min. 6 characters"/>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeModal('editUserModal')">Cancel</button>
+        <button type="submit" class="btn btn-primary"><i class="fa-solid fa-check"></i> Save Changes</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function openEditModal(uid, username, email, role) {
+  document.getElementById('editUserForm').action = `/admin/users/${uid}/edit`;
+  document.getElementById('editUsername').value  = username;
+  document.getElementById('editEmail').value     = email;
+  document.getElementById('editRole').value      = role;
+  openModal('editUserModal');
+}
+</script>
 {% endblock %}

@@ -31,6 +31,40 @@
   </div>
 </div>
 
+<!-- Earnings card -->
+<div class="earnings-card mb-6">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+    <div style="display:flex;align-items:center;gap:10px">
+      <i class="fa-solid fa-coins" style="color:var(--accent);font-size:18px"></i>
+      <span style="font-family:var(--font-mono);font-size:13px;font-weight:700;color:var(--accent);letter-spacing:.06em">EARNINGS</span>
+    </div>
+    <button class="btn btn-sm btn-secondary" id="earningsToggleBtn" onclick="toggleEarnings()">
+      <i class="fa-solid fa-eye-slash"></i> Hide
+    </button>
+  </div>
+  <div id="earningsContent">
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px">
+      <div style="text-align:center;padding:16px;background:var(--bg-card);border-radius:10px;border:1px solid var(--border)">
+        <div style="font-size:11px;font-family:var(--font-mono);color:var(--text-muted);letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px">Today</div>
+        <div style="font-family:var(--font-mono);font-size:26px;font-weight:700;color:var(--accent)">{{ "%.2f"|format(earnings.today) }} DT</div>
+      </div>
+      <div style="text-align:center;padding:16px;background:var(--bg-card);border-radius:10px;border:1px solid var(--border)">
+        <div style="font-size:11px;font-family:var(--font-mono);color:var(--text-muted);letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px">This Week</div>
+        <div style="font-family:var(--font-mono);font-size:26px;font-weight:700;color:var(--accent2)">{{ "%.2f"|format(earnings.week) }} DT</div>
+      </div>
+      <div style="text-align:center;padding:16px;background:var(--bg-card);border-radius:10px;border:1px solid var(--border)">
+        <div style="font-size:11px;font-family:var(--font-mono);color:var(--text-muted);letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px">This Month</div>
+        <div style="font-family:var(--font-mono);font-size:26px;font-weight:700;color:#22c55e">{{ "%.2f"|format(earnings.month) }} DT</div>
+      </div>
+    </div>
+    <div style="margin-top:16px">
+      <div class="chart-container" style="height:160px">
+        <canvas id="earningsChart"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="grid-2 mb-6">
   <!-- 7-day events chart -->
   <div class="card">
@@ -44,38 +78,77 @@
     </div>
   </div>
 
-  <!-- System status -->
+  <!-- Slot occupancy donut -->
   <div class="card">
     <div class="card-header">
-      <span class="card-title"><i class="fa-solid fa-server" style="margin-right:6px"></i>System Status</span>
-      <button class="btn btn-sm btn-secondary" onclick="refreshStatus()">
-        <i class="fa-solid fa-rotate-right"></i> Refresh
+      <span class="card-title"><i class="fa-solid fa-chart-pie" style="margin-right:6px"></i>Parking Occupancy</span>
+      <button class="btn btn-sm btn-secondary" onclick="refreshOccupancy()">
+        <i class="fa-solid fa-rotate-right"></i>
       </button>
     </div>
-    <div class="card-body" id="statusBody">
-      <div style="display:flex;flex-direction:column;gap:14px">
-        <div class="status-row">
-          <span style="color:var(--text-muted);font-size:13px">Simulation Mode</span>
-          <span class="badge {% if sim_mode %}badge-warning{% else %}badge-success{% endif %}">
-            {% if sim_mode %}ACTIVE{% else %}DISABLED{% endif %}
-          </span>
+    <div class="card-body" style="display:flex;align-items:center;gap:24px">
+      <div style="position:relative;width:160px;height:160px;flex-shrink:0">
+        <canvas id="occupancyChart"></canvas>
+        <div id="occupancyCenter" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center">
+          <div style="font-family:var(--font-mono);font-size:24px;font-weight:700;color:var(--text-primary)" id="occCenterNum">—</div>
+          <div style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono)">OCCUPIED</div>
         </div>
-        <div class="status-row">
-          <span style="color:var(--text-muted);font-size:13px">PC AI Server</span>
-          <span class="badge badge-muted" id="pcStatusBadge">CHECKING…</span>
+      </div>
+      <div style="flex:1">
+        <div style="display:flex;flex-direction:column;gap:10px" id="slotLegend">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <span style="font-size:13px;color:var(--text-secondary)"><span style="display:inline-block;width:10px;height:10px;background:var(--accent3);border-radius:2px;margin-right:6px"></span>Occupied Now</span>
+            <span style="font-family:var(--font-mono);font-weight:700" id="occOccupied">—</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <span style="font-size:13px;color:var(--text-secondary)"><span style="display:inline-block;width:10px;height:10px;background:#22c55e;border-radius:2px;margin-right:6px"></span>Available</span>
+            <span style="font-family:var(--font-mono);font-weight:700" id="occAvailable">—</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <span style="font-size:13px;color:var(--text-secondary)"><span style="display:inline-block;width:10px;height:10px;background:var(--accent);border-radius:2px;margin-right:6px"></span>Entered Today</span>
+            <span style="font-family:var(--font-mono);font-weight:700" id="occEntered">—</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;border-top:1px solid var(--border);padding-top:8px">
+            <span style="font-size:13px;color:var(--text-secondary)">Total Slots</span>
+            <span style="font-family:var(--font-mono);font-weight:700" id="occTotal">—</span>
+          </div>
         </div>
-        <div class="status-row">
-          <span style="color:var(--text-muted);font-size:13px">Sensor</span>
-          <span class="badge badge-muted" id="sensorStatusBadge">CHECKING…</span>
-        </div>
-        <div class="status-row">
-          <span style="color:var(--text-muted);font-size:13px">Gate</span>
-          <span class="badge badge-muted" id="gateStatusBadge">CHECKING…</span>
-        </div>
-        <div class="status-row">
-          <span style="color:var(--text-muted);font-size:13px">Sim Loop</span>
-          <span class="badge badge-muted" id="simLoopBadge">CHECKING…</span>
-        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- System status -->
+<div class="card mb-6">
+  <div class="card-header">
+    <span class="card-title"><i class="fa-solid fa-server" style="margin-right:6px"></i>System Status</span>
+    <button class="btn btn-sm btn-secondary" onclick="refreshStatus()">
+      <i class="fa-solid fa-rotate-right"></i> Refresh
+    </button>
+  </div>
+  <div class="card-body">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px" id="statusBody">
+      <div class="status-row-item">
+        <span style="color:var(--text-muted);font-size:13px">Simulation Mode</span>
+        <span class="badge {% if sim_mode %}badge-warning{% else %}badge-success{% endif %}">
+          {% if sim_mode %}ACTIVE{% else %}DISABLED{% endif %}
+        </span>
+      </div>
+      <div class="status-row-item">
+        <span style="color:var(--text-muted);font-size:13px">PC AI Server</span>
+        <span class="badge badge-muted" id="pcStatusBadge">CHECKING…</span>
+      </div>
+      <div class="status-row-item">
+        <span style="color:var(--text-muted);font-size:13px">Sensor</span>
+        <span class="badge badge-muted" id="sensorStatusBadge">CHECKING…</span>
+      </div>
+      <div class="status-row-item">
+        <span style="color:var(--text-muted);font-size:13px">Gate</span>
+        <span class="badge badge-muted" id="gateStatusBadge">CHECKING…</span>
+      </div>
+      <div class="status-row-item">
+        <span style="color:var(--text-muted);font-size:13px">Sim Loop</span>
+        <span class="badge badge-muted" id="simLoopBadge">CHECKING…</span>
       </div>
     </div>
   </div>
@@ -88,9 +161,6 @@
     <h3>Simulation Control Center</h3>
     <span class="badge badge-warning" style="margin-left:auto">ADMIN ONLY</span>
   </div>
-  <p style="font-size:13px;color:var(--text-secondary);margin-bottom:16px">
-    Manually trigger simulation events and control the virtual hardware state without needing physical sensors.
-  </p>
   <div class="sim-controls">
     <button class="btn btn-warning" onclick="fireSimEvent()">
       <i class="fa-solid fa-play"></i> Fire Sim Event
@@ -126,17 +196,27 @@
 </div>
 
 <style>
-.status-row { display:flex; align-items:center; justify-content:space-between;
-  padding:8px 0; border-bottom:1px solid var(--border); }
-.status-row:last-child { border-bottom:none; }
+.status-row-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
 </style>
 {% endblock %}
 
 {% block extra_js %}
 <script>
-// Chart
+// ── Events Chart ──────────────────────────────────────────────────────────────
 const chartData = {{ chart_data|safe }};
-new Chart(document.getElementById('eventsChart'), {
+const isDark    = () => document.documentElement.getAttribute('data-theme') !== 'light';
+const gridColor = () => isDark() ? 'rgba(255,255,255,.04)' : 'rgba(0,0,0,.06)';
+const tickColor = () => isDark() ? '#8890a8' : '#6a7290';
+
+const eventsChart = new Chart(document.getElementById('eventsChart'), {
   type: 'bar',
   data: {
     labels: chartData.map(d => d.date),
@@ -153,19 +233,87 @@ new Chart(document.getElementById('eventsChart'), {
     responsive: true, maintainAspectRatio: false,
     plugins: { legend: { display: false } },
     scales: {
-      x: { grid: { color: 'rgba(255,255,255,.04)' }, ticks: { color: '#8890a8', font: { family: 'Space Mono', size: 10 } } },
-      y: { grid: { color: 'rgba(255,255,255,.04)' }, ticks: { color: '#8890a8', font: { family: 'Space Mono', size: 10 } }, beginAtZero: true }
+      x: { grid: { color: gridColor() }, ticks: { color: tickColor(), font: { family: 'Space Mono', size: 10 } } },
+      y: { grid: { color: gridColor() }, ticks: { color: tickColor(), font: { family: 'Space Mono', size: 10 } }, beginAtZero: true }
     }
   }
 });
 
-// Status
+// ── Occupancy Donut ───────────────────────────────────────────────────────────
+let occupancyChart = null;
+
+function buildOccupancyChart(occupied, available) {
+  const ctx = document.getElementById('occupancyChart');
+  if (occupancyChart) occupancyChart.destroy();
+  occupancyChart = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: ['Occupied', 'Available'],
+      datasets: [{
+        data: [occupied, available],
+        backgroundColor: ['rgba(240,80,80,.8)', 'rgba(34,197,94,.8)'],
+        borderColor    : ['rgba(240,80,80,1)',   'rgba(34,197,94,1)'],
+        borderWidth    : 2,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      cutout: '70%',
+      plugins: { legend: { display: false }, tooltip: { enabled: true } }
+    }
+  });
+}
+
+async function refreshOccupancy() {
+  const res  = await fetch('/api/stats/slots');
+  const data = await res.json();
+  buildOccupancyChart(data.occupied_now, data.available_now);
+  document.getElementById('occCenterNum').textContent = data.occupied_now;
+  document.getElementById('occOccupied').textContent  = data.occupied_now;
+  document.getElementById('occAvailable').textContent = data.available_now;
+  document.getElementById('occEntered').textContent   = data.entered_today;
+  document.getElementById('occTotal').textContent     = data.total;
+}
+
+// ── Earnings Chart ────────────────────────────────────────────────────────────
+async function loadEarningsChart() {
+  try {
+    const res  = await fetch('/api/stats/earnings?days=7');
+    const data = await res.json();
+    new Chart(document.getElementById('earningsChart'), {
+      type: 'line',
+      data: {
+        labels: data.map(d => d.date),
+        datasets: [{
+          label: 'Earnings (DT)',
+          data: data.map(d => d.amount),
+          borderColor: 'rgba(0,212,180,1)',
+          backgroundColor: 'rgba(0,212,180,.1)',
+          borderWidth: 2,
+          pointRadius: 3,
+          fill: true,
+          tension: 0.4,
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { grid: { color: gridColor() }, ticks: { color: tickColor(), font: { family: 'Space Mono', size: 9 } } },
+          y: { grid: { color: gridColor() }, ticks: { color: tickColor(), font: { family: 'Space Mono', size: 9 } }, beginAtZero: true }
+        }
+      }
+    });
+  } catch(e) {}
+}
+
+// ── Status ────────────────────────────────────────────────────────────────────
 async function refreshStatus() {
   const res  = await fetch('/api/status');
   const data = await res.json();
 
-  document.getElementById('pcStatusBadge').textContent  = data.pc_online ? 'ONLINE' : 'OFFLINE';
-  document.getElementById('pcStatusBadge').className    = `badge badge-${data.pc_online ? 'success' : 'danger'}`;
+  document.getElementById('pcStatusBadge').textContent = data.pc_online ? 'ONLINE' : 'OFFLINE';
+  document.getElementById('pcStatusBadge').className   = `badge badge-${data.pc_online ? 'success' : 'danger'}`;
 
   const dist = data.sensor?.distance_m ?? '--';
   document.getElementById('sensorStatusBadge').textContent = `${dist}m`;
@@ -187,6 +335,7 @@ async function fireSimEvent() {
     ? `✓ Event fired | Plate: ${data.plate || 'N/A'} | ${data.authorized ? 'AUTHORIZED' : 'DENIED'}`
     : `✗ Error: ${data.error}`;
   loadLogs();
+  refreshOccupancy();
 }
 
 async function simVehicle(present) {
@@ -216,7 +365,10 @@ async function loadLogs() {
 
 refreshStatus();
 loadLogs();
+refreshOccupancy();
+loadEarningsChart();
 setInterval(refreshStatus, 10000);
 setInterval(loadLogs, 8000);
+setInterval(refreshOccupancy, 20000);
 </script>
 {% endblock %}

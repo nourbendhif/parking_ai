@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+{% block title %}Payments – ParkSense AI{% endblock %}
+{% block page_title %}Payment Management{% endblock %}
+
+{% block content %}
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+  <div>
+    <h2 style="font-family:var(--font-mono);font-size:16px;color:var(--text-primary)">Payments</h2>
+    <p style="font-size:13px;color:var(--text-muted);margin-top:2px">Reservation payments and earnings overview</p>
+  </div>
+</div>
+
+<!-- Earnings summary -->
+<div class="stats-grid mb-6">
+  <div class="stat-card accent-teal">
+    <div class="stat-label">Today</div>
+    <div class="stat-value" style="font-size:22px">{{ "%.2f"|format(earnings.today) }} DT</div>
+    <div class="stat-delta">Paid today</div>
+    <i class="fa-solid fa-coins stat-icon"></i>
+  </div>
+  <div class="stat-card accent-purple">
+    <div class="stat-label">This Week</div>
+    <div class="stat-value" style="font-size:22px">{{ "%.2f"|format(earnings.week) }} DT</div>
+    <div class="stat-delta">Weekly revenue</div>
+    <i class="fa-solid fa-chart-line stat-icon"></i>
+  </div>
+  <div class="stat-card accent-green">
+    <div class="stat-label">This Month</div>
+    <div class="stat-value" style="font-size:22px">{{ "%.2f"|format(earnings.month) }} DT</div>
+    <div class="stat-delta">Monthly revenue</div>
+    <i class="fa-solid fa-calendar stat-icon"></i>
+  </div>
+  <div class="stat-card accent-orange">
+    <div class="stat-label">Pending</div>
+    <div class="stat-value" style="font-size:22px">{{ payments.items | selectattr('status','eq','pending') | list | length }}</div>
+    <div class="stat-delta">Awaiting payment</div>
+    <i class="fa-solid fa-clock stat-icon"></i>
+  </div>
+</div>
+
+<div class="card">
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Date</th>
+          <th>User</th>
+          <th>Plate</th>
+          <th>Slot</th>
+          <th>Method</th>
+          <th>Amount</th>
+          <th>Status</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in payments.items %}
+        <tr>
+          <td class="mono" style="color:var(--text-muted)">{{ p.id }}</td>
+          <td style="font-size:12px;color:var(--text-muted);white-space:nowrap">
+            {{ p.created_at.strftime('%Y-%m-%d %H:%M') }}
+          </td>
+          <td style="color:var(--text-secondary)">
+            {{ p.user.username if p.user else '—' }}
+          </td>
+          <td>
+            <span class="mono" style="font-size:13px;font-weight:700;direction:rtl">
+              {{ p.reservation.vehicle.license_plate if p.reservation and p.reservation.vehicle else '—' }}
+            </span>
+          </td>
+          <td>
+            <span class="badge badge-muted">{{ p.reservation.slot_id if p.reservation else '—' }}</span>
+          </td>
+          <td>
+            <span class="badge {% if p.method == 'card' %}badge-info{% else %}badge-muted{% endif %}">
+              <i class="fa-solid fa-{% if p.method == 'card' %}credit-card{% else %}money-bill{% endif %}"></i>
+              {{ p.method|upper }}
+            </span>
+          </td>
+          <td>
+            <span class="mono" style="font-weight:700;color:var(--text-primary)">{{ "%.2f"|format(p.amount) }} DT</span>
+          </td>
+          <td>
+            <span class="badge
+              {% if p.status == 'paid' %}badge-success
+              {% elif p.status == 'refunded' %}badge-warning
+              {% else %}badge-danger{% endif %}">
+              {{ p.status|upper }}
+            </span>
+          </td>
+          <td>
+            <div style="display:flex;gap:6px;align-items:center">
+              {% if p.status == 'pending' %}
+              <form method="POST" action="{{ url_for('admin_mark_paid', pid=p.id) }}" style="display:inline">
+                <button type="submit" class="btn btn-sm btn-primary" title="Mark this payment as received">
+                  <i class="fa-solid fa-check"></i> Mark Paid
+                </button>
+              </form>
+              {% else %}
+              <span style="color:var(--text-muted);font-size:12px">
+                Paid {% if p.paid_at %}{{ p.paid_at.strftime('%H:%M') }}{% endif %}
+              </span>
+              {% endif %}
+              <!-- Delete button -->
+              <form method="POST" action="{{ url_for('admin_delete_payment', pid=p.id) }}" style="display:inline"
+                    onsubmit="return confirm('Permanently delete this payment record?');">
+                <button type="submit" class="btn btn-sm btn-danger" title="Delete payment record">
+                  <i class="fa-solid fa-trash"></i>
+                </button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="9" style="text-align:center;color:var(--text-muted);padding:32px">No payments found</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if payments.pages > 1 %}
+  <div style="padding:16px 20px;border-top:1px solid var(--border);display:flex;gap:6px;align-items:center">
+    {% if payments.has_prev %}
+    <a href="{{ url_for('admin_payments', page=payments.prev_num) }}" class="page-btn">← Prev</a>
+    {% endif %}
+    {% for p in payments.iter_pages(left_edge=2, right_edge=2, left_current=2, right_current=2) %}
+      {% if p %}
+      <a href="{{ url_for('admin_payments', page=p) }}" class="page-btn {% if p == payments.page %}active{% endif %}">{{ p }}</a>
+      {% else %}<span style="color:var(--text-muted)">…</span>{% endif %}
+    {% endfor %}
+    {% if payments.has_next %}
+    <a href="{{ url_for('admin_payments', page=payments.next_num) }}" class="page-btn">Next →</a>
+    {% endif %}
+    <span style="margin-left:auto;font-size:12px;color:var(--text-muted)">{{ payments.total }} total</span>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

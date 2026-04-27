@@ -1,6 +1,6 @@
 """
 Smart Parking System - SQLAlchemy Data Models
-Updated: Reservation now has reference + notes columns.
+Updated: payments, parking slots, vehicle ownership, admin controls.
 """
 from __future__ import annotations
 
@@ -28,9 +28,11 @@ class User(UserMixin, db.Model):
     last_login    = db.Column(db.DateTime)
 
     vehicles     = db.relationship("Vehicle",      backref="owner", lazy="dynamic",
-                                   cascade="all, delete-orphan")
+                                   cascade="all, delete-orphan",
+                                   foreign_keys="Vehicle.user_id")
     reservations = db.relationship("Reservation",  backref="user",  lazy="dynamic")
     events       = db.relationship("ParkingEvent", backref="user",  lazy="dynamic")
+    payments     = db.relationship("Payment",      backref="user",  lazy="dynamic")
 
     def set_password(self, password: str):
         self.password_hash = generate_password_hash(password)
@@ -79,7 +81,28 @@ class Vehicle(db.Model):
             "vehicle_type" : self.vehicle_type,
             "color"        : self.color,
             "is_authorized": self.is_authorized,
+            "user_id"      : self.user_id,
             "created_at"   : self.created_at.isoformat(),
+        }
+
+
+# ─── Parking Slot ─────────────────────────────────────────────────────────────
+
+class ParkingSlot(db.Model):
+    __tablename__ = "parking_slots"
+
+    id          = db.Column(db.Integer, primary_key=True)
+    slot_code   = db.Column(db.String(10), unique=True, nullable=False)  # e.g. A1, B2
+    is_active   = db.Column(db.Boolean, default=True)
+    description = db.Column(db.String(100))
+    created_at  = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def to_dict(self) -> dict:
+        return {
+            "id"         : self.id,
+            "slot_code"  : self.slot_code,
+            "is_active"  : self.is_active,
+            "description": self.description,
         }
 
 
@@ -94,10 +117,14 @@ class Reservation(db.Model):
     slot_id    = db.Column(db.String(10), default="A1")
     start_time = db.Column(db.DateTime, nullable=False)
     end_time   = db.Column(db.DateTime)
-    status     = db.Column(db.String(20), default="active")  # active | completed | cancelled
-    reference  = db.Column(db.String(60))   # ← matricule / personal reference
-    notes      = db.Column(db.Text)         # ← optional booking notes
+    status     = db.Column(db.String(20), default="active")   # active | completed | cancelled
+    reference  = db.Column(db.String(60))
+    notes      = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # Payment linkage
+    payment    = db.relationship("Payment", backref="reservation", uselist=False,
+                                 cascade="all, delete-orphan")
 
     def to_dict(self) -> dict:
         return {
@@ -108,6 +135,35 @@ class Reservation(db.Model):
             "status"    : self.status,
             "reference" : self.reference,
             "notes"     : self.notes,
+            "vehicle"   : self.vehicle.to_dict() if self.vehicle else None,
+            "payment"   : self.payment.to_dict() if self.payment else None,
+        }
+
+
+# ─── Payment ──────────────────────────────────────────────────────────────────
+
+class Payment(db.Model):
+    __tablename__ = "payments"
+
+    id             = db.Column(db.Integer, primary_key=True)
+    reservation_id = db.Column(db.Integer, db.ForeignKey("reservations.id"), nullable=False)
+    user_id        = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    amount         = db.Column(db.Float, nullable=False)
+    method         = db.Column(db.String(20), default="cash")   # cash | card
+    status         = db.Column(db.String(20), default="pending") # pending | paid | refunded
+    paid_at        = db.Column(db.DateTime)
+    created_at     = db.Column(db.DateTime, default=datetime.utcnow)
+    transaction_ref= db.Column(db.String(100))
+
+    def to_dict(self) -> dict:
+        return {
+            "id"             : self.id,
+            "amount"         : self.amount,
+            "method"         : self.method,
+            "status"         : self.status,
+            "paid_at"        : self.paid_at.isoformat() if self.paid_at else None,
+            "transaction_ref": self.transaction_ref,
+            "created_at"     : self.created_at.isoformat(),
         }
 
 

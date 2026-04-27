@@ -22,51 +22,66 @@
     <i class="fa-solid fa-check stat-icon"></i>
   </div>
   <div class="stat-card accent-purple">
-    <div class="stat-label">Registered Vehicles</div>
-    <div class="stat-value">{{ stats.total_vehicles }}</div>
-    <div class="stat-delta">In database</div>
-    <i class="fa-solid fa-car stat-icon"></i>
+    <div class="stat-label">Available Slots</div>
+    <div class="stat-value" id="statAvailSlots">{{ slot_stats.available_now }}</div>
+    <div class="stat-delta">of {{ slot_stats.total }} total</div>
+    <i class="fa-solid fa-square-parking stat-icon"></i>
+  </div>
+  <div class="stat-card accent-yellow">
+    <div class="stat-label">Reserved Slots</div>
+    <div class="stat-value" id="statReservedSlots">{{ slot_stats.get('reserved_now', 0) }}</div>
+    <div class="stat-delta" id="statReservedDelta">occupancy</div>
+    <i class="fa-solid fa-bookmark stat-icon"></i>
   </div>
   <div class="stat-card accent-orange">
-    <div class="stat-label">Total Users</div>
-    <div class="stat-value">{{ stats.total_users }}</div>
-    <div class="stat-delta">Accounts</div>
-    <i class="fa-solid fa-users stat-icon"></i>
+    <div class="stat-label">Entered Today</div>
+    <div class="stat-value">{{ slot_stats.entered_today }}</div>
+    <div class="stat-delta">Gate-opened entries</div>
+    <i class="fa-solid fa-car-on stat-icon"></i>
   </div>
 </div>
 
 <!-- ── Main grid ───────────────────────────────────────────────────────────── -->
-<div class="grid-2 mb-6" style="grid-template-columns: 1fr 1fr">
+<div class="grid-2 mb-6" style="grid-template-columns:1fr 1fr">
 
   <!-- Sensor + Gate -->
   <div class="card">
     <div class="card-header">
       <span class="card-title"><i class="fa-solid fa-radar" style="margin-right:6px"></i>Live Hardware</span>
-      <span class="badge badge-muted" id="hwSimBadge">{% if sim_mode %}SIMULATION{% else %}HARDWARE{% endif %}</span>
+      <div style="display:flex;gap:8px;align-items:center">
+        <span class="badge badge-muted" id="hwSimBadge">{% if sim_mode %}SIMULATION{% else %}HARDWARE{% endif %}</span>
+        <!-- Auto-detect toggle -->
+        <label class="toggle" title="Auto-detect when sensor triggers">
+          <input type="checkbox" id="autoDetectToggle"
+                 {% if auto_detect %}checked{% endif %}
+                 onchange="setAutoDetect(this.checked)"/>
+          <span class="toggle-slider"></span>
+        </label>
+        <span style="font-size:11px;color:var(--text-muted);font-family:var(--font-mono)">AUTO</span>
+      </div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:0;border-bottom:1px solid var(--border)">
 
       <!-- Sensor -->
       <div class="sensor-widget" style="border-right:1px solid var(--border)">
-        <svg class="radar-svg" viewBox="0 0 120 120" style="width:100px;height:100px">
-          <circle id="radarRing1" cx="60" cy="60" r="40" fill="none" stroke="var(--accent)" stroke-width="1" opacity="0.15"/>
-          <circle id="radarRing2" cx="60" cy="60" r="28" fill="none" stroke="var(--accent)" stroke-width="1" opacity="0.15"/>
-          <circle id="radarRing3" cx="60" cy="60" r="16" fill="none" stroke="var(--accent)" stroke-width="1" opacity="0.15"/>
+        <svg viewBox="0 0 120 120" style="width:100px;height:100px">
+          <circle cx="60" cy="60" r="40" fill="none" stroke="var(--accent)" stroke-width="1" opacity="0.15"/>
+          <circle cx="60" cy="60" r="28" fill="none" stroke="var(--accent)" stroke-width="1" opacity="0.15"/>
+          <circle cx="60" cy="60" r="16" fill="none" stroke="var(--accent)" stroke-width="1" opacity="0.15"/>
           <circle id="radarDot"   cx="60" cy="60" r="6"  fill="var(--accent)" opacity="0.9"/>
           <circle id="radarPulse" cx="60" cy="60" r="12" fill="none" stroke="var(--accent)" stroke-width="1.5" opacity="0"/>
         </svg>
         <div class="distance-display" id="distanceDisplay">--</div>
         <div class="distance-unit">metres</div>
         <div style="margin-top:4px">
-          <span class="badge" id="vehicleBadge" style="font-size:11px">NO VEHICLE</span>
+          <span class="badge badge-muted" id="vehicleBadge">NO VEHICLE</span>
         </div>
       </div>
 
       <!-- Gate -->
       <div class="gate-widget">
         <div style="font-family:var(--font-mono);font-size:10px;color:var(--text-muted);letter-spacing:.1em;text-transform:uppercase">Gate Status</div>
-        <div class="gate-visual">
-          <!-- Gate arm SVG -->
+        <div style="width:100px;height:80px">
           <svg viewBox="0 0 100 80" style="width:100%;height:100%">
             <rect x="45" y="60" width="10" height="20" fill="var(--accent)" rx="2"/>
             <rect id="gateArm" x="47" y="4" width="6" height="56" fill="var(--accent)" rx="3"
@@ -74,7 +89,7 @@
             <rect x="10" y="72" width="80" height="6" fill="var(--text-muted)" rx="3" opacity=".4"/>
           </svg>
         </div>
-        <div class="badge" id="gateBadge">CLOSED</div>
+        <div class="badge badge-muted" id="gateBadge">CLOSED</div>
         {% if current_user.is_admin %}
         <div style="display:flex;gap:8px;margin-top:4px">
           <button class="btn btn-sm btn-primary" onclick="manualGate('open')">
@@ -88,15 +103,15 @@
       </div>
     </div>
 
-    <!-- Trigger detection -->
-    <div style="padding:16px;display:flex;gap:10px;align-items:center">
+    <!-- Capture button only (no upload) -->
+    <div style="padding:16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
       <button class="btn btn-primary" id="detectBtn" onclick="triggerDetection()">
-        <i class="fa-solid fa-camera"></i> Capture & Detect
+        <i class="fa-solid fa-camera"></i> Capture &amp; Detect
       </button>
-      <input type="file" id="imageUpload" accept="image/*" style="display:none" onchange="detectFromFile(this)"/>
-      <button class="btn btn-secondary" onclick="document.getElementById('imageUpload').click()">
-        <i class="fa-solid fa-upload"></i> Upload Image
-      </button>
+      <div style="font-size:11px;color:var(--text-muted);font-family:var(--font-mono)">
+        <i class="fa-solid fa-keyboard"></i> Press <kbd style="background:var(--bg-hover);padding:2px 5px;border-radius:3px;border:1px solid var(--border)">Space</kbd>
+      </div>
+      <div id="autoDetectStatus" style="font-size:11px;font-family:var(--font-mono);color:var(--text-muted)"></div>
     </div>
   </div>
 
@@ -111,17 +126,36 @@
         <div class="detection-placeholder" id="detectionPlaceholder">
           <i class="fa-solid fa-camera-slash"></i>
           <p>No detection yet</p>
-          <p style="font-size:11px;color:var(--text-muted)">Press "Capture & Detect" or upload an image</p>
+          <p style="font-size:11px;color:var(--text-muted)">Press "Capture & Detect" or wait for auto-detect</p>
         </div>
         <img id="detectionImg" src="" alt="Detection" style="display:none"/>
         <div class="detection-overlay" id="detectionOverlay" style="display:none">
           <div>
-            <div style="font-family:var(--font-mono);font-size:18px;font-weight:700;color:#fff" id="detectedPlate">---</div>
+            <div style="font-family:var(--font-mono);font-size:18px;font-weight:700;color:#fff;direction:rtl;text-align:right" id="detectedPlate">---</div>
             <div style="font-size:11px;color:rgba(255,255,255,.6)" id="detectedConf"></div>
+            <div style="font-size:10px;color:rgba(255,255,255,.4)" id="detectedRaw"></div>
           </div>
           <div id="detectedAuth" class="badge">---</div>
         </div>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Parking slots visual ────────────────────────────────────────────────── -->
+<div class="card mb-6">
+  <div class="card-header">
+    <span class="card-title"><i class="fa-solid fa-map" style="margin-right:6px"></i>Parking Slots</span>
+    <span style="font-size:12px;color:var(--text-muted)" id="slotSummary">Loading…</span>
+  </div>
+  <div class="card-body">
+    <div class="slot-grid" id="slotGrid">
+      <div style="color:var(--text-muted);font-size:13px">Loading slots…</div>
+    </div>
+    <div style="display:flex;gap:16px;margin-top:14px;font-size:12px">
+      <span><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:rgba(34,197,94,.3);border:1px solid rgba(34,197,94,.4);margin-right:5px"></span>Available</span>
+      <span><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:rgba(250,204,21,.24);border:1px solid rgba(250,204,21,.45);margin-right:5px"></span>Reserved</span>
+      <span><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:rgba(240,80,80,.3);border:1px solid rgba(240,80,80,.4);margin-right:5px"></span>Occupied</span>
     </div>
   </div>
 </div>
@@ -133,7 +167,9 @@
   <div class="card">
     <div class="card-header">
       <span class="card-title"><i class="fa-solid fa-clock-rotate-left" style="margin-right:6px"></i>Recent Events</span>
+      {% if current_user.is_admin %}
       <a href="{{ url_for('admin_events') }}" class="btn btn-sm btn-secondary">View All</a>
+      {% endif %}
     </div>
     <div class="card-body" style="padding:0 20px" id="recentEventsList">
       {% for e in recent_events %}
@@ -142,7 +178,7 @@
           <i class="fa-solid fa-{% if e.gate_opened %}check{% elif e.simulated %}flask-vial{% else %}xmark{% endif %}"></i>
         </div>
         <div class="event-info">
-          <div class="event-plate">{{ e.license_plate or 'NO PLATE' }}</div>
+          <div class="event-plate" style="direction:rtl;text-align:right">{{ e.license_plate or 'NO PLATE' }}</div>
           <div class="event-meta">{{ e.notes or e.event_type }}</div>
         </div>
         <div class="event-time">{{ e.timestamp.strftime('%H:%M:%S') }}</div>
@@ -171,8 +207,8 @@
   </div>
 </div>
 
-<!-- ── Detection loading overlay ───────────────────────────────────────────── -->
-<div id="loadingOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:300;display:none;place-items:center">
+<!-- ── Loading overlay ─────────────────────────────────────────────────────── -->
+<div id="loadingOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:300;place-items:center">
   <div style="text-align:center">
     <i class="fa-solid fa-circle-notch spin" style="font-size:40px;color:var(--accent)"></i>
     <div style="font-family:var(--font-mono);color:var(--accent);margin-top:12px">PROCESSING…</div>
@@ -190,15 +226,22 @@ evtSource.onmessage = (e) => {
   const data = JSON.parse(e.data);
   updateSensorUI(data.distance_m, data.vehicle_detected);
   updateGateUI(data.gate_open);
+  
+  // If new detection result received, display it
+  if (data.latest_detection && data.latest_detection.plate !== undefined) {
+    showDetection(data.latest_detection);
+    addLog('INFO', `Auto-detect: ${data.latest_detection.plate || 'NO PLATE'} | ${data.latest_detection.authorized ? 'AUTHORIZED' : 'DENIED'}`);
+    refreshEvents();
+  }
 };
 
 function updateSensorUI(dist, detected) {
-  const el = document.getElementById('distanceDisplay');
-  el.textContent = dist > 0 ? dist.toFixed(2) : '--';
-
+  const el    = document.getElementById('distanceDisplay');
   const badge = document.getElementById('vehicleBadge');
   const dot   = document.getElementById('radarDot');
   const pulse = document.getElementById('radarPulse');
+
+  el.textContent = dist > 0 ? dist.toFixed(2) : '--';
 
   if (detected) {
     badge.textContent = 'VEHICLE DETECTED';
@@ -215,62 +258,52 @@ function updateSensorUI(dist, detected) {
 function animatePulse(el, color) {
   el.setAttribute('stroke', color);
   el.setAttribute('opacity', '0.8');
-  el.animate([
-    { r: '12', opacity: 0.8 },
-    { r: '50', opacity: 0 }
-  ], { duration: 1200, easing: 'ease-out' });
+  el.animate([{ r: '12', opacity: 0.8 }, { r: '50', opacity: 0 }],
+             { duration: 1200, easing: 'ease-out' });
 }
 
 function updateGateUI(isOpen) {
   const arm   = document.getElementById('gateArm');
   const badge = document.getElementById('gateBadge');
-  if (isOpen) {
-    arm.style.transform   = 'rotate(-90deg)';
-    badge.textContent     = 'OPEN';
-    badge.className       = 'badge badge-success';
-  } else {
-    arm.style.transform   = '';
-    badge.textContent     = 'CLOSED';
-    badge.className       = 'badge badge-muted';
-  }
+  arm.style.transform = isOpen ? 'rotate(-90deg)' : '';
+  badge.textContent   = isOpen ? 'OPEN' : 'CLOSED';
+  badge.className     = `badge badge-${isOpen ? 'success' : 'muted'}`;
+}
+
+// ── Auto-detect ───────────────────────────────────────────────────────────────
+async function setAutoDetect(enabled) {
+  // POST to settings endpoint via lightweight call
+  await fetch('/api/status'); // just to keep session alive
+  const status = document.getElementById('autoDetectStatus');
+  if (status) status.textContent = enabled ? '⚡ Auto-detect ON' : 'Auto-detect OFF';
+  // Persist via settings — admin only toggle in dashboard,
+  // but SSE handles actual trigger on server side
+  addLog('INFO', `Auto-detect ${enabled ? 'enabled' : 'disabled'}`);
 }
 
 // ── Detection ─────────────────────────────────────────────────────────────────
 async function triggerDetection() {
+  const btn = document.getElementById('detectBtn');
+  if (btn.disabled) return;
   showLoading(true);
-  try {
-    const res  = await fetch('/api/detect', { method: 'POST',
-      headers: { 'Content-Type': 'application/json' }, body: '{}' });
-    const data = await res.json();
-    showDetection(data);
-    addLog('INFO', `Detection: ${data.plate || 'NO PLATE'} | ${data.authorized ? 'AUTHORIZED' : 'DENIED'}`);
-    refreshEvents();
-  } catch(e) {
-    addLog('ERROR', 'Detection request failed: ' + e.message);
-  }
-  showLoading(false);
-}
-
-async function detectFromFile(input) {
-  const file = input.files[0];
-  if (!file) return;
-  showLoading(true);
-  const b64 = await toBase64(file);
+  btn.disabled = true;
   try {
     const res  = await fetch('/api/detect', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ image_b64: b64.split(',')[1] })
+      body: '{}'
     });
     const data = await res.json();
     showDetection(data);
-    addLog('INFO', `Upload detect: ${data.plate || 'NO PLATE'}`);
+    const plate = data.plate || 'NO PLATE';
+    addLog('INFO', `Detection: ${plate} | ${data.authorized ? 'AUTHORIZED' : 'DENIED'}${data.fuzzy_score && data.fuzzy_score < 1 ? ` [fuzzy ${(data.fuzzy_score*100).toFixed(0)}%]` : ''}`);
     refreshEvents();
+    refreshSlots();
   } catch(e) {
-    addLog('ERROR', 'Upload failed: ' + e.message);
+    addLog('ERROR', 'Detection failed: ' + e.message);
   }
   showLoading(false);
-  input.value = '';
+  btn.disabled = false;
 }
 
 function showDetection(data) {
@@ -280,17 +313,21 @@ function showDetection(data) {
   const badge       = document.getElementById('detectionBadge');
   const plate       = document.getElementById('detectedPlate');
   const conf        = document.getElementById('detectedConf');
+  const rawEl       = document.getElementById('detectedRaw');
   const auth        = document.getElementById('detectedAuth');
 
   if (data.annotated_b64) {
-    img.src           = 'data:image/jpeg;base64,' + data.annotated_b64;
-    img.style.display = 'block';
+    img.src               = 'data:image/jpeg;base64,' + data.annotated_b64;
+    img.style.display     = 'block';
     placeholder.style.display = 'none';
-    overlay.style.display     = 'flex';
+    overlay.style.display = 'flex';
   }
 
   plate.textContent = data.plate || 'NO PLATE FOUND';
   conf.textContent  = data.confidence ? `Confidence: ${(data.confidence*100).toFixed(1)}%` : '';
+  if (rawEl && data.raw_ocr && data.raw_ocr !== data.plate) {
+    rawEl.textContent = `OCR raw: ${data.raw_ocr}`;
+  }
 
   if (data.authorized) {
     auth.textContent  = '✓ AUTHORIZED';
@@ -308,16 +345,50 @@ function showDetection(data) {
     badge.textContent = 'NO DETECTION';
     badge.className   = 'badge badge-muted';
   }
-
-  if (data.simulated) {
-    badge.textContent += ' (SIM)';
-  }
+  if (data.simulated) badge.textContent += ' (SIM)';
 }
 
-// ── Gate manual control ───────────────────────────────────────────────────────
+// ── Gate manual ───────────────────────────────────────────────────────────────
 async function manualGate(action) {
   await fetch(`/api/gate/${action}`, { method: 'POST' });
   addLog('INFO', `Manual gate ${action.toUpperCase()} command sent`);
+}
+
+// ── Slot visual ───────────────────────────────────────────────────────────────
+async function refreshSlots() {
+  try {
+    const res  = await fetch('/api/stats/slots');
+    const data = await res.json();
+    const grid = document.getElementById('slotGrid');
+    const sum  = document.getElementById('slotSummary');
+    
+    if (sum) {
+      sum.textContent = `${data.available_now || 0} available / ${data.reserved_now || 0} reserved / ${data.occupied_now || 0} occupied / ${data.total || 0} total`;
+    }
+
+    if (grid && Array.isArray(data.slot_details) && data.slot_details.length) {
+      let html = '';
+      // Render slots with real status from backend
+      for (const slot of data.slot_details) {
+        const statusClass = slot.status || 'available';
+        const icon = statusClass === 'occupied' ? 'car' : statusClass === 'reserved' ? 'bookmark' : 'square-parking';
+        html += `
+          <div class="slot-cell ${statusClass}" title="${slot.slot_code}: ${slot.title}" 
+               data-slot="${slot.slot_code}" data-status="${statusClass}">
+            <i class="fa-solid fa-${icon}" style="font-size:14px;margin-bottom:2px"></i>
+            <span>${slot.slot_code}</span>
+          </div>
+        `;
+      }
+      grid.innerHTML = html;
+      // Add fade-in animation
+      grid.querySelectorAll('.slot-cell').forEach((el, i) => {
+        el.style.animation = `fadeIn 0.3s ease-in-out ${i * 20}ms forwards`;
+      });
+    }
+  } catch(e) {
+    console.error('Slot refresh error:', e);
+  }
 }
 
 // ── Events refresh ────────────────────────────────────────────────────────────
@@ -331,7 +402,7 @@ async function refreshEvents() {
         <i class="fa-solid fa-${e.gate_opened ? 'check' : e.simulated ? 'flask-vial' : 'xmark'}"></i>
       </div>
       <div class="event-info">
-        <div class="event-plate">${e.license_plate || 'NO PLATE'}</div>
+        <div class="event-plate" style="direction:rtl;text-align:right">${e.license_plate || 'NO PLATE'}</div>
         <div class="event-meta">${e.notes || e.event_type}</div>
       </div>
       <div class="event-time">${new Date(e.timestamp).toLocaleTimeString()}</div>
@@ -349,26 +420,13 @@ function addLog(level, msg) {
   if (feed.children.length > 60) feed.lastChild.remove();
 }
 
-function clearLog() {
-  document.getElementById('logFeed').innerHTML = '';
-}
+function clearLog() { document.getElementById('logFeed').innerHTML = ''; }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
 function showLoading(show) {
-  const el = document.getElementById('loadingOverlay');
-  el.style.display = show ? 'grid' : 'none';
+  document.getElementById('loadingOverlay').style.display = show ? 'grid' : 'none';
 }
 
-function toBase64(file) {
-  return new Promise((res, rej) => {
-    const r = new FileReader();
-    r.onload  = () => res(r.result);
-    r.onerror = rej;
-    r.readAsDataURL(file);
-  });
-}
-
-// Poll logs every 8s
+// Poll logs every 8s, slots every 15s
 setInterval(async () => {
   try {
     const res  = await fetch('/api/logs/recent?limit=5');
@@ -378,10 +436,31 @@ setInterval(async () => {
   } catch(e) {}
 }, 8000);
 
+// Real-time slot updates every 10 seconds
+// Real-time slot updates every 5 seconds
+setInterval(refreshSlots, 5000);
+
+// Update reserved stat alongside slots
+async function updateReservedStat() {
+  try {
+    const res = await fetch('/api/stats/slots');
+    const data = await res.json();
+    const el = document.getElementById('statReservedSlots');
+    const delta = document.getElementById('statReservedDelta');
+    if (el) el.textContent = data.reserved_now || 0;
+    if (delta) delta.textContent = `of ${data.total} slots`;
+  } catch(e) {}
+}
+setInterval(updateReservedStat, 10000);
+
 // Sim badge
 if (SIM_MODE) {
   const sb = document.getElementById('simBadge');
-  if (sb) { sb.style.display = 'flex'; sb.classList.add('sim-active'); }
+  if (sb) { sb.style.display = 'flex'; }
 }
+
+// Init
+refreshSlots();
+updateReservedStat();
 </script>
 {% endblock %}

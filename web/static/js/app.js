@@ -1,7 +1,27 @@
 /**
  * ParkSense AI – Core JavaScript
- * Handles: sidebar, clock, modals, status polling
+ * Theme toggle, sidebar, clock, modals, status polling, auto-detect, GPIO
  */
+
+// ── Theme Toggle ──────────────────────────────────────────────────────────────
+(function initTheme() {
+  const saved = localStorage.getItem('ps-theme') || 'dark';
+  document.documentElement.setAttribute('data-theme', saved);
+  updateThemeIcon(saved);
+})();
+
+function toggleTheme() {
+  const current = document.documentElement.getAttribute('data-theme') || 'dark';
+  const next    = current === 'dark' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', next);
+  localStorage.setItem('ps-theme', next);
+  updateThemeIcon(next);
+}
+
+function updateThemeIcon(theme) {
+  const btn = document.getElementById('themeToggleBtn');
+  if (btn) btn.textContent = theme === 'dark' ? '☀️' : '🌙';
+}
 
 // ── Clock ─────────────────────────────────────────────────────────────────────
 function updateClock() {
@@ -15,8 +35,8 @@ updateClock();
 
 // ── Sidebar toggle (mobile) ───────────────────────────────────────────────────
 function toggleSidebar() {
-  const sidebar  = document.getElementById('sidebar');
-  const overlay  = document.getElementById('sidebarOverlay');
+  const sidebar = document.getElementById('sidebar');
+  const overlay = document.getElementById('sidebarOverlay');
   if (!sidebar) return;
   sidebar.classList.toggle('open');
   overlay.classList.toggle('open');
@@ -33,14 +53,12 @@ function closeModal(id) {
   if (el) el.classList.remove('open');
 }
 
-// Close modal on backdrop click
 document.addEventListener('click', (e) => {
   if (e.target.classList.contains('modal-backdrop')) {
     e.target.classList.remove('open');
   }
 });
 
-// Close modal on Escape
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     document.querySelectorAll('.modal-backdrop.open').forEach(m => m.classList.remove('open'));
@@ -63,7 +81,6 @@ async function pollTopbarStatus() {
     if (!res.ok) return;
     const data = await res.json();
 
-    // PC status pill
     const pill = document.getElementById('pcStatus');
     if (pill) {
       const dot = pill.querySelector('.dot');
@@ -76,17 +93,17 @@ async function pollTopbarStatus() {
       }
     }
 
-    // Sim badge in topbar
     const simBadge = document.getElementById('simBadge');
-    if (simBadge) {
-      simBadge.style.display = data.simulation_mode ? 'flex' : 'none';
+    if (simBadge) simBadge.style.display = data.simulation_mode ? 'flex' : 'none';
+
+    // Update auto-detect indicator
+    const adBadge = document.getElementById('autoDetectBadge');
+    if (adBadge) {
+      adBadge.style.display = data.auto_detect ? 'flex' : 'none';
     }
-  } catch (e) {
-    // Silently fail
-  }
+  } catch (e) {}
 }
 
-// Poll every 15 seconds
 setInterval(pollTopbarStatus, 15000);
 pollTopbarStatus();
 
@@ -114,13 +131,12 @@ function formatNumber(n) {
 
 // ── Animate stat counters on load ─────────────────────────────────────────────
 function animateCounter(el, target, duration = 800) {
-  const start    = 0;
-  const step     = (timestamp) => {
+  const step = (timestamp) => {
     if (!startTime) startTime = timestamp;
-    const elapsed = timestamp - startTime;
+    const elapsed  = timestamp - startTime;
     const progress = Math.min(elapsed / duration, 1);
-    const eased    = 1 - Math.pow(1 - progress, 3); // ease-out-cubic
-    el.textContent = Math.round(start + (target - start) * eased);
+    const eased    = 1 - Math.pow(1 - progress, 3);
+    el.textContent = Math.round(target * eased);
     if (progress < 1) requestAnimationFrame(step);
   };
   let startTime = null;
@@ -132,11 +148,41 @@ document.querySelectorAll('.stat-value').forEach(el => {
   if (!isNaN(val) && val > 0) animateCounter(el, val);
 });
 
-// ── Tooltip (simple title attr) ───────────────────────────────────────────────
-// Native title tooltips work fine for our purposes
+// ── Earnings visibility toggle ────────────────────────────────────────────────
+let earningsVisible = localStorage.getItem('ps-earnings-visible') !== 'false';
 
-// ── Theme toggle (future use) ─────────────────────────────────────────────────
-// Currently locked to dark theme per design
+function toggleEarnings() {
+  earningsVisible = !earningsVisible;
+  localStorage.setItem('ps-earnings-visible', earningsVisible);
+  _applyEarningsVisibility();
+}
 
-console.log('%cParkSense AI v2.0', 'color:#00d4b4;font-family:monospace;font-size:16px;font-weight:bold');
+function _applyEarningsVisibility() {
+  const content = document.getElementById('earningsContent');
+  const btn     = document.getElementById('earningsToggleBtn');
+  if (!content) return;
+  content.classList.toggle('earnings-hidden', !earningsVisible);
+  if (btn) {
+    btn.innerHTML = earningsVisible
+      ? '<i class="fa-solid fa-eye-slash"></i> Hide'
+      : '<i class="fa-solid fa-eye"></i> Show';
+  }
+}
+
+document.addEventListener('DOMContentLoaded', _applyEarningsVisibility);
+
+// ── GPIO physical button (RPi) ────────────────────────────────────────────────
+// This endpoint is called by RPi GPIO button handler (Python side can POST to /api/gpio/capture)
+// From the browser, we also expose a keyboard shortcut (Space) when on dashboard
+document.addEventListener('keydown', (e) => {
+  if (e.code === 'Space' && document.getElementById('detectBtn') &&
+      document.activeElement.tagName !== 'INPUT' &&
+      document.activeElement.tagName !== 'TEXTAREA') {
+    e.preventDefault();
+    if (typeof triggerDetection === 'function') triggerDetection();
+  }
+});
+
+console.log('%cParkSense AI v2.1', 'color:#00d4b4;font-family:monospace;font-size:16px;font-weight:bold');
 console.log('%cSmart Parking Management System', 'color:#8890a8;font-family:monospace');
+console.log('%cPress [Space] on dashboard to trigger detection', 'color:#4e5568;font-family:monospace;font-size:11px');

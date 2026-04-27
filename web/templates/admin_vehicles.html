@@ -28,6 +28,7 @@
           <th>#</th>
           <th>License Plate</th>
           <th>Owner</th>
+          <th>User Account</th>
           <th>Type</th>
           <th>Color</th>
           <th>Access</th>
@@ -40,11 +41,16 @@
         <tr data-search="{{ v.license_plate|lower }} {{ v.owner_name|lower }}">
           <td class="mono" style="color:var(--text-muted)">{{ v.id }}</td>
           <td>
-            <span class="mono" style="font-size:14px;font-weight:700;color:var(--text-primary);letter-spacing:.05em">
+            <span class="mono" style="font-size:14px;font-weight:700;color:var(--text-primary);letter-spacing:.04em;direction:rtl;display:inline-block">
               {{ v.license_plate }}
             </span>
           </td>
           <td style="color:var(--text-secondary)">{{ v.owner_name or '—' }}</td>
+          <td style="color:var(--text-muted);font-size:12px">
+            {% if v.owner %}
+            <span class="badge badge-muted">{{ v.owner.username }}</span>
+            {% else %}—{% endif %}
+          </td>
           <td>
             <span class="badge badge-muted">
               <i class="fa-solid fa-{% if v.vehicle_type == 'truck' %}truck{% elif v.vehicle_type == 'motorcycle' %}motorcycle{% else %}car{% endif %}"></i>
@@ -78,7 +84,7 @@
           </td>
         </tr>
         {% else %}
-        <tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:32px">No vehicles registered</td></tr>
+        <tr><td colspan="9" style="text-align:center;color:var(--text-muted);padding:32px">No vehicles registered</td></tr>
         {% endfor %}
       </tbody>
     </table>
@@ -96,7 +102,11 @@
       <div class="modal-body">
         <div class="form-group">
           <label>License Plate *</label>
-          <input type="text" name="license_plate" required placeholder="e.g. ABC-1234" style="text-transform:uppercase"/>
+          <input type="text" name="license_plate" required placeholder="e.g. 195 تونس 4705 or ABC-1234"
+                 style="text-transform:uppercase;direction:rtl;text-align:right"/>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:4px">
+            Supports Tunisian Arabic plates (Arabic city name auto-normalised for fuzzy OCR matching)
+          </div>
         </div>
         <div class="form-group">
           <label>Owner Name</label>
@@ -113,7 +123,8 @@
         <div class="form-group">
           <label>Color</label>
           <div style="display:flex;gap:8px;align-items:center">
-            <input type="color" name="color" value="#3b82f6" style="width:48px;height:38px;padding:2px;border-radius:6px;cursor:pointer"/>
+            <input type="color" name="color" value="#3b82f6"
+                   style="width:48px;height:38px;padding:2px;border-radius:6px;cursor:pointer"/>
             <span style="font-size:12px;color:var(--text-muted)">Pick vehicle color</span>
           </div>
         </div>
@@ -134,7 +145,6 @@
     </form>
   </div>
 </div>
-
 {% endblock %}
 
 {% block extra_js %}
